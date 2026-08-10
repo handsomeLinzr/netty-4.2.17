@@ -36,10 +36,19 @@ import static io.netty.util.internal.ObjectUtil.checkPositive;
  */
 public abstract class MultithreadEventExecutorGroup extends AbstractEventExecutorGroup {
 
+    // 执行器组
     private final EventExecutor[] children;
+
+    // 执行器组集合
     private final Set<EventExecutor> readonlyChildren;
+
+    // 当前已经关闭的执行器的数量
     private final AtomicInteger terminatedChildren = new AtomicInteger();
+
+    // 执行器关闭回调
     private final Promise<?> terminationFuture = new DefaultPromise(GlobalEventExecutor.INSTANCE);
+
+    // 执行器选择器
     private final EventExecutorChooserFactory.EventExecutorChooser chooser;
 
     /**
@@ -59,6 +68,9 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
      * @param nThreads          the number of threads that will be used by this instance.
      * @param executor          the Executor to use, or {@code null} if the default should be used.
      * @param args              arguments which will passed to each {@link #newChild(Executor, Object...)} call
+     *
+     * DefaultEventExecutorChooserFactory.INSTANCE 线程组选择策略
+     * 默认 DefaultEventExecutorChooserFactory
      */
     protected MultithreadEventExecutorGroup(int nThreads, Executor executor, Object... args) {
         this(nThreads, executor, DefaultEventExecutorChooserFactory.INSTANCE, args);
@@ -76,15 +88,19 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
                                             EventExecutorChooserFactory chooserFactory, Object... args) {
         checkPositive(nThreads, "nThreads");
 
+        // 默认如果没有线程池，则创建 ThreadPerTaskExecutor 线程池
         if (executor == null) {
+            // 线程池，用作创建的模板
             executor = new ThreadPerTaskExecutor(newDefaultThreadFactory());
         }
 
+        // 设置 children，此时是一个数组，大小为传进来的线程数
         children = new EventExecutor[nThreads];
 
         for (int i = 0; i < nThreads; i ++) {
             boolean success = false;
             try {
+                // 给 children 创建线程
                 children[i] = newChild(executor, args);
                 success = true;
             } catch (Exception e) {
@@ -92,6 +108,7 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
                 throw new IllegalStateException("failed to create a child event loop", e);
             } finally {
                 if (!success) {
+                    // 如果有失败的，则将对应的所有 children 线程关闭
                     for (int j = 0; j < i; j ++) {
                         children[j].shutdownGracefully();
                     }
@@ -112,15 +129,20 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
             }
         }
 
+        // 创建对应的选择器
         chooser = chooserFactory.newChooser(children);
 
+        // 关闭事件
         final FutureListener<Object> terminationListener = future -> {
+            // 关闭的时候，给 terminatedChildren 加1
             if (terminatedChildren.incrementAndGet() == children.length) {
+                // 当数量到了，则设置 terminationFuture 返回
                 terminationFuture.setSuccess(null);
             }
         };
 
         for (EventExecutor e: children) {
+            // 给 children 添加关闭事件
             e.terminationFuture().addListener(terminationListener);
         }
 

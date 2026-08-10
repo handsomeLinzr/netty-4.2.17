@@ -129,6 +129,8 @@ public class MultiThreadIoEventLoopGroup extends MultithreadEventLoopGroup imple
      * @param ioHandlerFactory  the {@link IoHandlerFactory} that will be used to create {@link IoHandler} for handling
      *                          IO.
      * @param args              extra args that are passed to {@link #newChild(Executor, Object...)} method.
+     *
+     * 多线程的线程组
      */
     protected MultiThreadIoEventLoopGroup(int nThreads, Executor executor,
                                           IoHandlerFactory ioHandlerFactory, Object... args) {
@@ -183,18 +185,23 @@ public class MultiThreadIoEventLoopGroup extends MultithreadEventLoopGroup imple
         super(nThreads, executor, chooserFactory, combine(ioHandlerFactory, args));
     }
 
+
+    // 创建 EventLoop 事件组
     // The return type should be IoHandleEventLoop but we choose EventLoop to allow us to introduce the IoHandle
     // concept without breaking API.
     @Override
     protected EventLoop newChild(Executor executor, Object... args) throws Exception {
+        // 获取对应的 io工厂
         IoHandlerFactory handlerFactory = (IoHandlerFactory) args[0];
         Object[] argsCopy;
         if (args.length > 1) {
             argsCopy = new Object[args.length - 1];
             System.arraycopy(args, 1, argsCopy, 0, argsCopy.length);
         } else {
+            // 空参数，默认这里
             argsCopy = EmptyArrays.EMPTY_OBJECTS;
         }
+        // 创建 child
         return newChild(executor, handlerFactory, argsCopy);
     }
 
@@ -206,6 +213,9 @@ public class MultiThreadIoEventLoopGroup extends MultithreadEventLoopGroup imple
      *                              handle IO.
      * @param args                  extra arguments that are based by the constructor.
      * @return                      the created {@link IoEventLoop}.
+     *
+     * 通过给的 Executor 和 IoHandler工厂，创建对应的 io事件组
+     *
      */
     protected IoEventLoop newChild(Executor executor, IoHandlerFactory ioHandlerFactory,
                                    @SuppressWarnings("unused") Object... args) {
@@ -217,6 +227,10 @@ public class MultiThreadIoEventLoopGroup extends MultithreadEventLoopGroup imple
         return (IoEventLoop) super.next();
     }
 
+    /**
+     * 合并，将 handlerFactory 和 args 合并成一个数组返回
+     * @return
+     */
     private static Object[] combine(IoHandlerFactory handlerFactory, Object... args) {
         List<Object> combinedList = new ArrayList<Object>();
         combinedList.add(handlerFactory);

@@ -27,11 +27,20 @@ public final class DefaultEventExecutorChooserFactory implements EventExecutorCh
 
     private DefaultEventExecutorChooserFactory() { }
 
+    /**
+     *
+     * 根据执行器获取选择器的策略
+     *
+     * @param executors
+     * @return
+     */
     @Override
     public EventExecutorChooser newChooser(EventExecutor[] executors) {
         if (isPowerOfTwo(executors.length)) {
+            // 判断如果 executors 数量是 2 的指数，用 PowerOfTwoEventExecutorChooser
             return new PowerOfTwoEventExecutorChooser(executors);
         } else {
+            // 否则默认用 GenericEventExecutorChooser
             return new GenericEventExecutorChooser(executors);
         }
     }
@@ -40,7 +49,11 @@ public final class DefaultEventExecutorChooserFactory implements EventExecutorCh
         return (val & -val) == val;
     }
 
+    /**
+     * 2指数的选择器
+     */
     private static final class PowerOfTwoEventExecutorChooser implements EventExecutorChooser {
+        // 当前选择到的位置
         private final AtomicInteger idx = new AtomicInteger();
         private final EventExecutor[] executors;
 
@@ -54,6 +67,9 @@ public final class DefaultEventExecutorChooserFactory implements EventExecutorCh
         }
     }
 
+    /**
+     * 通用选择器
+     */
     private static final class GenericEventExecutorChooser implements EventExecutorChooser {
         // Use a 'long' counter to avoid non-round-robin behaviour at the 32-bit overflow boundary.
         // The 64-bit long solves this by placing the overflow so far into the future, that no system

@@ -70,6 +70,7 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
         }
     };
 
+    // 创建对应的 NioIoHandler
     private final IoHandler ioHandler;
 
     private final AtomicInteger numRegistrations = new AtomicInteger();
@@ -101,7 +102,9 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
     public SingleThreadIoEventLoop(IoEventLoopGroup parent, Executor executor, IoHandlerFactory ioHandlerFactory) {
         super(parent, executor, false,
                 ObjectUtil.checkNotNull(ioHandlerFactory, "ioHandlerFactory").isChangingThreadSupported());
+        // 时间？
         this.maxTaskProcessingQuantumNs = DEFAULT_MAX_TASK_PROCESSING_QUANTUM_NS;
+        // 创建 NioIoHandler
         this.ioHandler = ioHandlerFactory.newHandler(this);
     }
 

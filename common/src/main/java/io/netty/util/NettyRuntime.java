@@ -31,6 +31,9 @@ public final class NettyRuntime {
      */
     static class AvailableProcessorsHolder {
 
+        /**
+         * 默认是 核心线*2
+         */
         private int availableProcessors;
 
         /**
@@ -66,7 +69,9 @@ public final class NettyRuntime {
                 final int availableProcessors =
                         SystemPropertyUtil.getInt(
                                 "io.netty.availableProcessors",
+                                // 核心数
                                 Runtime.getRuntime().availableProcessors());
+                // 设置 availableProcessors = 核心数
                 setAvailableProcessors(availableProcessors);
             }
             return this.availableProcessors;

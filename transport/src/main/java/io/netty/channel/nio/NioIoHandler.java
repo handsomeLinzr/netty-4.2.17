@@ -83,13 +83,18 @@ public final class NioIoHandler implements IoHandler {
     // - https://bugs.openjdk.java.net/browse/JDK-6527572 for JDK prior to 5.0u15-rev and 6u10
     // - https://github.com/netty/netty/issues/203
     static {
+        /**
+         * JDK 的 bug 修复
+         */
         int selectorAutoRebuildThreshold = SystemPropertyUtil.getInt("io.netty.selectorAutoRebuildThreshold", 512);
         if (selectorAutoRebuildThreshold < MIN_PREMATURE_SELECTOR_RETURNS) {
             selectorAutoRebuildThreshold = 0;
         }
 
+        // selector 自动重建的阈值，默认 512
         SELECTOR_AUTO_REBUILD_THRESHOLD = selectorAutoRebuildThreshold;
 
+        // 日志处理
         if (logger.isDebugEnabled()) {
             logger.debug("-Dio.netty.noKeySetOptimization: {}", DISABLE_KEY_SET_OPTIMIZATION);
             logger.debug("-Dio.netty.selectorAutoRebuildThreshold: {}", SELECTOR_AUTO_REBUILD_THRESHOLD);
@@ -98,11 +103,16 @@ public final class NioIoHandler implements IoHandler {
 
     /**
      * The NIO {@link Selector}.
+     * 对应的 NIO 的选择器
+     * 构造函数设置。一般对应 SelectedSelectionKeySetSelector
      */
     private Selector selector;
+    // 原生 未包装的 selector
     private Selector unwrappedSelector;
+    // 当前 selector 得到的 key
     private SelectedSelectionKeySet selectedKeys;
 
+    // 构造函数设置的 selector
     private final SelectorProvider provider;
 
     /**
@@ -113,23 +123,35 @@ public final class NioIoHandler implements IoHandler {
      */
     private final AtomicBoolean wakenUp = new AtomicBoolean();
 
+    // select 策略，构造函数设置
+    // 默认是对应的 DefaultSelectStrategy.INSTANCE
     private final SelectStrategy selectStrategy;
+
+    // 构造器设置的线程池
     private final ThreadAwareExecutor executor;
     private int cancelledKeys;
     private boolean needsToSelectAgain;
 
     private NioIoHandler(ThreadAwareExecutor executor, SelectorProvider selectorProvider,
                          SelectStrategy strategy) {
+        // 赋值处理
         this.executor = ObjectUtil.checkNotNull(executor, "executionContext");
         this.provider = ObjectUtil.checkNotNull(selectorProvider, "selectorProvider");
         this.selectStrategy = ObjectUtil.checkNotNull(strategy, "selectStrategy");
+
+        // 调用 open 得到对应的 selector，然后进行一层包装
         final SelectorTuple selectorTuple = openSelector();
+        // 被包装的 selector
         this.selector = selectorTuple.selector;
+        // 原生未包装的 selector
         this.unwrappedSelector = selectorTuple.unwrappedSelector;
     }
 
     private static final class SelectorTuple {
+
+        // 原始的 selector
         final Selector unwrappedSelector;
+        // SelectedSelectionKeySetSelector
         final Selector selector;
 
         SelectorTuple(Selector unwrappedSelector) {
@@ -138,23 +160,34 @@ public final class NioIoHandler implements IoHandler {
         }
 
         SelectorTuple(Selector unwrappedSelector, Selector selector) {
+            // 原始 selector
             this.unwrappedSelector = unwrappedSelector;
+            // SelectedSelectionKeySetSelector
             this.selector = selector;
         }
     }
 
+    /**
+     * 得到对应的 selector
+     * @return
+     */
     private SelectorTuple openSelector() {
         final Selector unwrappedSelector;
         try {
+            // 调用 open 获取对应的原生 selector
             unwrappedSelector = provider.openSelector();
         } catch (IOException e) {
             throw new ChannelException("failed to open a new selector", e);
         }
 
+        // selector 优化，一般不设置，默认 false，一般不走进来
         if (DISABLE_KEY_SET_OPTIMIZATION) {
             return new SelectorTuple(unwrappedSelector);
         }
 
+        /**
+         * 获取 sun.nio.ch.SelectorImpl 这个 Class 类
+         */
         Object maybeSelectorImplClass = AccessController.doPrivileged(new PrivilegedAction<Object>() {
             @Override
             public Object run() {
@@ -169,6 +202,7 @@ public final class NioIoHandler implements IoHandler {
             }
         });
 
+        // false，一般不走进来
         if (!(maybeSelectorImplClass instanceof Class) ||
                 // ensure the current selector implementation is what we can instrument.
                 !((Class<?>) maybeSelectorImplClass).isAssignableFrom(unwrappedSelector.getClass())) {
@@ -179,16 +213,21 @@ public final class NioIoHandler implements IoHandler {
             return new SelectorTuple(unwrappedSelector);
         }
 
+        // sun.nio.ch.SelectorImpl
         final Class<?> selectorImplClass = (Class<?>) maybeSelectorImplClass;
+        // selectKey 缓存
         final SelectedSelectionKeySet selectedKeySet = new SelectedSelectionKeySet();
 
         Object maybeException = AccessController.doPrivileged(new PrivilegedAction<Object>() {
             @Override
             public Object run() {
                 try {
+                    // SelectorImpl.selectedKeys 字段
                     Field selectedKeysField = selectorImplClass.getDeclaredField("selectedKeys");
+                    // SelectorImpl.publicSelectedKeys 字段
                     Field publicSelectedKeysField = selectorImplClass.getDeclaredField("publicSelectedKeys");
 
+                    // jdk9 或 以上 版本
                     if (PlatformDependent.javaVersion() >= 9 && PlatformDependent.hasUnsafe()) {
                         // Let us try to use sun.misc.Unsafe to replace the SelectionKeySet.
                         // This allows us to also do this in Java9+ without any extra flags.
@@ -206,16 +245,20 @@ public final class NioIoHandler implements IoHandler {
                         // We could not retrieve the offset, lets try reflection as last-resort.
                     }
 
+                    // 对 selectedKeysField 强制授权
                     Throwable cause = ReflectionUtil.trySetAccessible(selectedKeysField, true);
                     if (cause != null) {
                         return cause;
                     }
+                    // 对 publicSelectedKeysField 强制授权
                     cause = ReflectionUtil.trySetAccessible(publicSelectedKeysField, true);
                     if (cause != null) {
                         return cause;
                     }
 
+                    // 将 selectedKeySet 设置到 unwrappedSelector 的 selectedKeysField
                     selectedKeysField.set(unwrappedSelector, selectedKeySet);
+                    // 将 selectedKeySet 也设置到 unwrappedSelector 的 publicSelectedKeysField
                     publicSelectedKeysField.set(unwrappedSelector, selectedKeySet);
                     return null;
                 } catch (NoSuchFieldException | IllegalAccessException e) {
@@ -224,14 +267,19 @@ public final class NioIoHandler implements IoHandler {
             }
         });
 
+        // 异常，一般不会，跳过
         if (maybeException instanceof Exception) {
             selectedKeys = null;
             Exception e = (Exception) maybeException;
             logger.trace("failed to instrument a special java.util.Set into: {}", unwrappedSelector, e);
             return new SelectorTuple(unwrappedSelector);
         }
+
+        // 赋值设置
         selectedKeys = selectedKeySet;
+        // 日志追踪
         logger.trace("instrumented a special java.util.Set into: {}", unwrappedSelector);
+        // 给 unwrappedSelector 做一个包装，然后返回
         return new SelectorTuple(unwrappedSelector,
                 new SelectedSelectionKeySetSelector(unwrappedSelector, selectedKeySet));
     }
@@ -798,16 +846,31 @@ public final class NioIoHandler implements IoHandler {
      * @return factory                  the {@link IoHandlerFactory}.
      *
      * 创建一个 IoHandlerFactory，用来创建 NioIoHandler 实例
+     *      selectorProvider - 对应系统的 selector 提供者
+     *      selectStrategyFactory - 单例模式，DefaultSelectStrategyFactory 对象
      *
      */
     public static IoHandlerFactory newFactory(final SelectorProvider selectorProvider,
                                               final SelectStrategyFactory selectStrategyFactory) {
+        // 校验非空
         ObjectUtil.checkNotNull(selectorProvider, "selectorProvider");
         ObjectUtil.checkNotNull(selectStrategyFactory, "selectStrategyFactory");
+
+        /**
+         * 返回 io处理工厂
+         * 实现了创建逻辑
+         */
+
         return new IoHandlerFactory() {
+
+            // 创建逻辑
             @Override
             public IoHandler newHandler(ThreadAwareExecutor executor) {
-                // SelectStrategyFactory.INSTANCE
+                /**
+                 * 创建 nio 处理工厂
+                 * selectorProvider - 对应系统的 selector
+                 * selectStrategyFactory.newSelectStrategy() 得到对应的 DefaultSelectStrategy.INSTANCE，单例对象
+                 */
                 return new NioIoHandler(executor, selectorProvider, selectStrategyFactory.newSelectStrategy());
             }
 
