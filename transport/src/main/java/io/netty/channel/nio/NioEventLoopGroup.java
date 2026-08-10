@@ -86,6 +86,7 @@ public class NioEventLoopGroup extends MultiThreadIoEventLoopGroup implements Io
      * SelectorProvider = SelectorProvider.provider() 调用了jdk原生的nio轮询器提供
      * 默认 linux 是 epoll，mac 是 KQueueSelectorProvider
      *
+     */
     public NioEventLoopGroup(int nThreads, Executor executor) {
         this(nThreads, executor, SelectorProvider.provider());
     }
