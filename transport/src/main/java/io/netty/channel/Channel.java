@@ -240,6 +240,10 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
         return config().setOption(option, value);
     }
 
+    /**
+     * 读取
+     * @return
+     */
     @Override
     default Channel read() {
         pipeline().read();
@@ -297,6 +301,12 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
         return pipeline().connect(remoteAddress, promise);
     }
 
+    /**
+     * 通道绑定
+     * @param localAddress
+     * @param promise
+     * @return
+     */
     @Override
     default ChannelFuture bind(SocketAddress localAddress, ChannelPromise promise) {
         return pipeline().bind(localAddress, promise);

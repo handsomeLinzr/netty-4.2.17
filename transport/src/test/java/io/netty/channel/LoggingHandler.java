@@ -114,7 +114,11 @@ final class LoggingHandler implements ChannelInboundHandler, ChannelOutboundHand
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
+
+        // 日志输出
         log(Event.ACTIVE);
+
+        // 传递下一个
         ctx.fireChannelActive();
     }
 

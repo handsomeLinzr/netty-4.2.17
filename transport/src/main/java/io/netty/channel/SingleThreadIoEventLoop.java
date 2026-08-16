@@ -371,6 +371,11 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
             return registration.attachment();
         }
 
+        /**
+         * 增加监听事件
+         * @param ops ops.
+         * @return
+         */
         @Override
         public long submit(IoOps ops) {
             return registration.submit(ops);

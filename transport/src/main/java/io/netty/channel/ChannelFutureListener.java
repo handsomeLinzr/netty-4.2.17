@@ -50,6 +50,8 @@ public interface ChannelFutureListener extends GenericFutureListener<ChannelFutu
      * operation ended up with a failure or cancellation rather than a success.
      */
     ChannelFutureListener CLOSE_ON_FAILURE = new ChannelFutureListener() {
+
+        // 失败则关闭通道
         @Override
         public void operationComplete(ChannelFuture future) {
             if (!future.isSuccess()) {

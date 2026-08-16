@@ -410,13 +410,23 @@ public final class NioIoHandler implements IoHandler {
             return !canceled.get() && key.isValid();
         }
 
+        /**
+         * 增加监听事件
+         * @param ops ops.
+         * @return
+         */
         @Override
         public long submit(IoOps ops) {
+            // 已失效，返回 -1
             if (!isValid()) {
                 return -1;
             }
+
+            // 增加的监听事件的值
             int v = cast(ops).value;
+            // key 监听
             key.interestOps(v);
+            // 返回
             return v;
         }
 

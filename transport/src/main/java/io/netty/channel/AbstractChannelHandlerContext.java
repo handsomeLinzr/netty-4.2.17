@@ -519,6 +519,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             return promise;
         }
 
+        // 获取下一个 outbound 且有绑定方法的处理
         final AbstractChannelHandlerContext next = findContextOutbound(MASK_BIND);
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
@@ -531,6 +532,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                     final ChannelHandler handler = next.handler();
                     final DefaultChannelPipeline.HeadContext headContext = pipeline.head;
                     if (handler == headContext) {
+                        // 到最后调用到 head.bind
                         headContext.bind(next, localAddress, promise);
                     } else if (handler instanceof ChannelDuplexHandler) {
                         ((ChannelDuplexHandler) handler).bind(next, localAddress, promise);
@@ -739,6 +741,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                     final ChannelHandler handler = next.handler();
                     final DefaultChannelPipeline.HeadContext headContext = pipeline.head;
                     if (handler == headContext) {
+                        // 读
                         headContext.read(next);
                     } else if (handler instanceof ChannelDuplexHandler) {
                         ((ChannelDuplexHandler) handler).read(next);

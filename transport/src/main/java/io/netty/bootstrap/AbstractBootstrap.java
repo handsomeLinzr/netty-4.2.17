@@ -338,13 +338,17 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             return regFuture;
         }
 
-        // 执行完了
+        // 注册成功了的话
         if (regFuture.isDone()) {
 
             // 创建 channel 对应的 DefaultChannelPromise
             // At this point we know that the registration was complete and successful.
             ChannelPromise promise = channel.newPromise();
+
+            // 绑定
             doBind0(regFuture, channel, localAddress, promise);
+
+            // 返回绑定结果
             return promise;
         } else {
 
@@ -437,6 +441,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         return ChannelInitializerExtensions.getExtensions().extensions(loader);
     }
 
+    /**
+     * 绑定
+     */
     private static void doBind0(
             final ChannelFuture regFuture, final Channel channel,
             final SocketAddress localAddress, final ChannelPromise promise) {
@@ -447,8 +454,11 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             @Override
             public void run() {
                 if (regFuture.isSuccess()) {
+                    // 判断注册成功，则进行绑定
+                    // 然后给绑定的异步器添加监听器 ChannelFutureListener.CLOSE_ON_FAILURE
                     channel.bind(localAddress, promise).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
                 } else {
+                    // 失败，则直接设置异步失败原因
                     promise.setFailure(regFuture.cause());
                 }
             }

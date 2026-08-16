@@ -114,8 +114,15 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         }
     }
 
+    /**
+     * 添加事件监听
+     * @param addOps
+     */
     protected void addAndSubmit(NioIoOps addOps) {
+        // 获取现在 selector 的监听石健
         int interestOps = selectionKey().interestOps();
+
+        // 判断如果还没有 addOps 事件
         if (!addOps.isIncludedIn(interestOps)) {
             try {
                 registration().submit(NioIoOps.valueOf(interestOps).with(addOps));
@@ -530,6 +537,8 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
         readPending = true;
 
+        // readOps 一开始创建当前类的时候，默认是 OP_ACCEPT
+        // 这里则进行注册 OP_ACCEPT 事件
         addAndSubmit(readOps);
     }
 

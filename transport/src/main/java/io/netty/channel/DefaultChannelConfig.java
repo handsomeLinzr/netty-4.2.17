@@ -72,6 +72,7 @@ public class DefaultChannelConfig implements ChannelConfig {
     private volatile int writeSpinCount = 16;
     private volatile int maxMessagesPerWrite = Integer.MAX_VALUE;
 
+    // 默认自动 read
     @SuppressWarnings("FieldMayBeFinal")
     private volatile int autoRead = 1;
     private volatile boolean autoClose = true;

@@ -64,7 +64,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     private volatile SocketAddress remoteAddress;
 
     /**
-     * 对应分配的单线程执行器 SingleThreadIoEventLoop
+     * 对应分配的单线程执行器 NioEventLoop
      */
     private volatile EventLoop eventLoop;
 
@@ -440,7 +440,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                     // 触发 promise 的监听器
                     safeSetSuccess(promise);
 
-                    // 传播注册事件，会调用到 channelRegistered 方法，注册完成
+                    // 传播注册事件，会调用到 channelRegistered 方法
                     pipeline.fireChannelRegistered();
 
                     // Only fire a channelActive if the channel has never been registered. This prevents firing
@@ -470,6 +470,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             doRegister(registerPromise);
         }
 
+        /**
+         * 绑定
+         * @param localAddress
+         * @param promise
+         */
         @Override
         public final void bind(final SocketAddress localAddress, final ChannelPromise promise) {
             assertEventLoop();
@@ -491,8 +496,12 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                         "address (" + localAddress + ") anyway as requested.");
             }
 
+            // 是否已经激活
             boolean wasActive = isActive();
             try {
+
+                // 开始绑定
+                // 调用了 java 原生 socket 进行绑定
                 doBind(localAddress);
             } catch (Throwable t) {
                 safeSetFailure(promise, t);
@@ -501,6 +510,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
 
             if (!wasActive && isActive()) {
+                // 如果之前没激活，现在激活
+                // 则执行 fireChannelActive
+                // 这里激活后会监听 OP_ACCEPT 事件
                 invokeLater(new Runnable() {
                     @Override
                     public void run() {
@@ -509,6 +521,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 });
             }
 
+            // 回调异步器唤醒
             safeSetSuccess(promise);
         }
 
@@ -754,11 +767,15 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             });
         }
 
+        /**
+         * 读取
+         */
         @Override
         public final void beginRead() {
             assertEventLoop();
 
             try {
+                // 开始读数据
                 doBeginRead();
             } catch (final Exception e) {
                 invokeLater(new Runnable() {
@@ -823,6 +840,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             flush0();
         }
 
+        /**
+         * 写事件
+         */
         @SuppressWarnings("deprecation")
         protected void flush0() {
             if (inFlush0) {
@@ -856,6 +876,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
 
             try {
+
+                // 开始写缓存
                 doWrite(outboundBuffer);
             } catch (Throwable t) {
                 handleWriteError(t);

@@ -923,9 +923,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     public final ChannelPipeline fireChannelRegistered() {
         if (head.executor().inEventLoop()) {
             if (head.invokeHandler()) {
+
                 // register 从 head 开始
                 head.channelRegistered(head);
             } else {
+
                 // 否则还没添加完成，则将事件传递下去
                 head.fireChannelRegistered();
             }
@@ -1017,6 +1019,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
+    /**
+     * 通道激活
+     * 从 head 开始
+     * @return
+     */
     @Override
     public final ChannelPipeline fireChannelActive() {
         if (head.executor().inEventLoop()) {
@@ -1151,6 +1158,12 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return this;
     }
 
+    /**
+     * 绑定
+     * @param localAddress
+     * @param promise
+     * @return
+     */
     @Override
     public final ChannelFuture bind(SocketAddress localAddress, ChannelPromise promise) {
         return tail.bind(localAddress, promise);
@@ -1673,6 +1686,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
          */
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
+            // 先继续往下传播
             ctx.fireChannelActive();
 
             // 注册读事件，包括连接、读
@@ -1707,6 +1721,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
         private void readIfIsAutoRead() {
             if (channel.config().isAutoRead()) {
+                // 读取
                 channel.read();
             }
         }
