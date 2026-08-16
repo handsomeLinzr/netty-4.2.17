@@ -19,9 +19,16 @@ import java.net.SocketAddress;
 
 /**
  * {@link ChannelHandler} which will get notified for IO-outbound-operations.
+ *
+ *
+ * 出站处理，触发 IO 出站
+ *
  */
 public interface ChannelOutboundHandler extends ChannelHandler {
     /**
+     *
+     * 绑定
+     *
      * Called once a bind operation is made.
      *
      * @param ctx           the {@link ChannelHandlerContext} for which the bind operation is made
@@ -32,6 +39,9 @@ public interface ChannelOutboundHandler extends ChannelHandler {
     void bind(ChannelHandlerContext ctx, SocketAddress localAddress, ChannelPromise promise) throws Exception;
 
     /**
+     *
+     * 连接
+     *
      * Called once a connect operation is made.
      *
      * @param ctx               the {@link ChannelHandlerContext} for which the connect operation is made
@@ -45,6 +55,9 @@ public interface ChannelOutboundHandler extends ChannelHandler {
             SocketAddress localAddress, ChannelPromise promise) throws Exception;
 
     /**
+     *
+     * 断开连接
+     *
      * Called once a disconnect operation is made.
      *
      * @param ctx               the {@link ChannelHandlerContext} for which the disconnect operation is made
@@ -54,6 +67,9 @@ public interface ChannelOutboundHandler extends ChannelHandler {
     void disconnect(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception;
 
     /**
+     *
+     * 关闭
+     *
      * Called once a close operation is made.
      *
      * @param ctx               the {@link ChannelHandlerContext} for which the close operation is made
@@ -63,6 +79,9 @@ public interface ChannelOutboundHandler extends ChannelHandler {
     void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception;
 
     /**
+     *
+     * 注销
+     *
      * Called once a deregister operation is made from the current registered {@link EventLoop}.
      *
      * @param ctx               the {@link ChannelHandlerContext} for which the close operation is made
@@ -72,11 +91,17 @@ public interface ChannelOutboundHandler extends ChannelHandler {
     void deregister(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception;
 
     /**
+     *
+     * 读取
+     *
      * Intercepts {@link ChannelHandlerContext#read()}.
      */
     void read(ChannelHandlerContext ctx) throws Exception;
 
     /**
+     *
+     * 写数据
+     *
     * Called once a write operation is made. The write operation will write the messages through the
      * {@link ChannelPipeline}. Those are then ready to be flushed to the actual {@link Channel} once
      * {@link Channel#flush()} is called
@@ -89,6 +114,9 @@ public interface ChannelOutboundHandler extends ChannelHandler {
     void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception;
 
     /**
+     *
+     * 刷新
+     *
      * Called once a flush operation is made. The flush operation will try to flush out all previous written messages
      * that are pending.
      *
