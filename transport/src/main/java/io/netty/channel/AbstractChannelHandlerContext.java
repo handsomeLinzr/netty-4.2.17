@@ -808,20 +808,34 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return this;
     }
 
+    /**
+     * 通过通道写数据
+     */
     @Override
     public ChannelFuture writeAndFlush(Object msg, ChannelPromise promise) {
+        // 写数据
         write(msg, true, promise);
+        // 返回异步器
         return promise;
     }
 
+    /**
+     * 写数据
+     */
     void write(Object msg, boolean flush, ChannelPromise promise) {
+        // 先验证是否可写
         if (validateWrite(msg, promise)) {
+
+            // 获取有 write 或者  write 和 flush 标识的执行器
             final AbstractChannelHandlerContext next = findContextOutbound(flush ?
                     MASK_WRITE | MASK_FLUSH : MASK_WRITE);
             final Object m = pipeline.touch(msg, next);
+            // 得到对应的事件组
             EventExecutor executor = next.executor();
             if (executor.inEventLoop()) {
                 if (next.invokeHandler()) {
+
+                    // todo ？？
                     promise = ensurePromiseUseCorrectExecutor(promise);
                     try {
                         // DON'T CHANGE
@@ -830,6 +844,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                         final ChannelHandler handler = next.handler();
                         final DefaultChannelPipeline.HeadContext headContext = pipeline.head;
                         if (handler == headContext) {
+                            // 调用 head 写出去
                             headContext.write(next, msg, promise);
                         } else if (handler instanceof ChannelDuplexHandler) {
                             ((ChannelDuplexHandler) handler).write(next, msg, promise);
@@ -841,6 +856,8 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                     } catch (Throwable t) {
                         notifyOutboundHandlerException(t, promise);
                     }
+
+                    // 如果有要刷新
                     if (flush) {
                         try {
                             // DON'T CHANGE
@@ -849,6 +866,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                             final ChannelHandler handler = next.handler();
                             final DefaultChannelPipeline.HeadContext headContext = pipeline.head;
                             if (handler == headContext) {
+                                // 刷新数据发送出去
                                 headContext.flush(next);
                             } else if (handler instanceof ChannelDuplexHandler) {
                                 ((ChannelDuplexHandler) handler).flush(next);

@@ -85,11 +85,14 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
             try {
                 try {
                     do {
+                        // 读取数据到 readBuf 缓存
                         int localRead = doReadMessages(readBuf);
                         if (localRead == 0) {
+                            // 0 则表示没有，直接跳出循环
                             break;
                         }
                         if (localRead < 0) {
+                            // 小于 0 则直接关闭，跳出循环
                             closed = true;
                             break;
                         }
@@ -100,21 +103,30 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                     exception = t;
                 }
 
+                // 获取连接数量
                 int size = readBuf.size();
                 for (int i = 0; i < size; i ++) {
                     readPending = false;
+
+                    // 处理 fireChannelRead 事件
                     pipeline.fireChannelRead(readBuf.get(i));
                 }
+
+                // 缓存处理
                 readBuf.clear();
                 allocHandle.readComplete();
+
+                // 传播通道读取完成事件
                 pipeline.fireChannelReadComplete();
 
+                // 异常
                 if (exception != null) {
                     closed = closeOnReadError(exception);
 
                     pipeline.fireExceptionCaught(exception);
                 }
 
+                // 关闭
                 if (closed) {
                     inputShutdown = true;
                     if (isOpen()) {
@@ -129,6 +141,8 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                 //
                 // See https://github.com/netty/netty/issues/2254
                 if (!readPending && !config.isAutoRead()) {
+                    // 如果没有设置自动读
+                    // 则需要移除读监听
                     removeReadOp();
                 }
             }

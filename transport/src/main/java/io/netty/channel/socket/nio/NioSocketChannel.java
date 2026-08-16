@@ -61,8 +61,15 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
     private static final Method OPEN_SOCKET_CHANNEL_WITH_FAMILY =
             SelectorProviderUtil.findOpenMethod("openSocketChannel");
 
+    // NioSocketChannelConfig
     private final SocketChannelConfig config;
 
+    /**
+     * 创建JAVA 原生 SocketChannel
+     * @param provider
+     * @param family
+     * @return
+     */
     private static SocketChannel newChannel(SelectorProvider provider, SocketProtocolFamily family) {
         try {
             SocketChannel channel = SelectorProviderUtil.newChannel(OPEN_SOCKET_CHANNEL_WITH_FAMILY, provider, family);
@@ -73,6 +80,9 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
     }
 
     /**
+     *
+     * 无参构造函数，返回一个 NioSocketChannel
+     *
      * Create a new instance
      */
     public NioSocketChannel() {
@@ -97,9 +107,13 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
     }
 
     /**
+     *
+     * 创建一个实例
+     *
      * Create a new instance using the given {@link SelectorProvider} and protocol family (supported only since JDK 15).
      */
     public NioSocketChannel(SelectorProvider provider, SocketProtocolFamily family) {
+        // newChannel(provider, family) 得到 java 原生 SocketChannel
         this(newChannel(provider, family));
     }
 
@@ -111,6 +125,10 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
     }
 
     /**
+     *
+     *
+     * 创建一个实例
+     *
      * Create a new instance
      *
      * @param parent    the {@link Channel} which created this instance or {@code null} if it was created by the user
@@ -312,8 +330,10 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
         boolean success = false;
         try {
+            // 连接
             boolean connected = SocketUtils.connect(javaChannel(), remoteAddress);
             if (!connected) {
+                // 增加连接监听
                 addAndSubmit(NioIoOps.CONNECT);
             }
             success = true;
@@ -350,15 +370,28 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         return byteBuf.writeBytes(javaChannel(), allocHandle.attemptedBytesRead());
     }
 
+    /**
+     * 普通字节数据刷新操作
+     * @param buf           the {@link ByteBuf} from which the bytes should be written
+     * @return
+     * @throws Exception
+     */
     @Override
     protected int doWriteBytes(ByteBuf buf) throws Exception {
         final int expectedWrittenBytes = buf.readableBytes();
         return buf.readBytes(javaChannel(), expectedWrittenBytes);
     }
 
+    /**
+     * 文件的刷新操作
+     * @param region        the {@link FileRegion} from which the bytes should be written
+     * @return
+     * @throws Exception
+     */
     @Override
     protected long doWriteFileRegion(FileRegion region) throws Exception {
         final long position = region.transferred();
+        // 调用 transferTo 零拷贝
         return region.transferTo(javaChannel(), position);
     }
 
@@ -443,6 +476,10 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         incompleteWrite(writeSpinCount < 0);
     }
 
+    /**
+     * 客户端的，对应 NioSocketChannelUnsafe
+     * @return
+     */
     @Override
     protected AbstractNioUnsafe newUnsafe() {
         return new NioSocketChannelUnsafe();

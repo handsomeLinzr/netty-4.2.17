@@ -42,12 +42,14 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractChannel.class);
 
+    // 只有当前是客户端时才会设置，parent 是对应的 服务端Channel
     private final Channel parent;
     private final ChannelId id;
 
     /**
      * 当前channel对应的 unsafe 类
      * 在构造函数 AbstractChannel 设置，对应的类是 NioMessageUnsafe
+     * 如果是 nioSocketChannel，则对应的是 NioSocketChannelUnsafe
      */
     private final Unsafe unsafe;
 
@@ -94,6 +96,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         // 创建对应的 unsafe 类
         // NioMessageUnsafe
+        // NioSocketChannelUnsafe
         unsafe = newUnsafe();
 
         // 创建对应的责任链，DefaultChannelPipeline
@@ -314,6 +317,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
      */
     protected abstract class AbstractUnsafe implements Unsafe {
 
+        // 写数据缓存
         private volatile ChannelOutboundBuffer outboundBuffer = new ChannelOutboundBuffer(AbstractChannel.this);
         private RecvByteBufAllocator.Handle recvHandle;
         private boolean inFlush0;
@@ -788,6 +792,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+        /**
+         * 写数据
+         * @param msg
+         * @param promise
+         */
         @Override
         public final void write(Object msg, ChannelPromise promise) {
             assertEventLoop();
@@ -795,6 +804,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) {
                 try {
+
+                    // 释放
                     // release message now to prevent resource-leak
                     ReferenceCountUtil.release(msg);
                 } finally {
@@ -810,7 +821,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             int size;
             try {
+
+                // msg 转换，比如堆内内存转成直接内存
                 msg = filterOutboundMessage(msg);
+
+                // 计算大小 size
                 size = pipeline.estimatorHandle().size(msg);
                 if (size < 0) {
                     size = 0;
@@ -824,19 +839,27 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 将 msg 信息添加到缓存 outboundBuffer 中
             outboundBuffer.addMessage(msg, size, promise);
         }
 
+
+        /**
+         * 刷数据出去
+         */
         @Override
         public final void flush() {
             assertEventLoop();
 
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) {
+                // 没有缓存，直接返回即可
                 return;
             }
 
+            // 将缓存 buffer 添加 flush 标识
             outboundBuffer.addFlush();
+            // 刷缓存
             flush0();
         }
 
@@ -846,10 +869,12 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         @SuppressWarnings("deprecation")
         protected void flush0() {
             if (inFlush0) {
+                // 避免重复刷
                 // Avoid re-entrance
                 return;
             }
 
+            // 获取缓存
             final ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null || outboundBuffer.isEmpty()) {
                 return;
@@ -857,6 +882,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             inFlush0 = true;
 
+            // 如果通道未激活
             // Mark all pending write requests as failure if the channel is inactive.
             if (!isActive()) {
                 try {
@@ -877,7 +903,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             try {
 
-                // 开始写缓存
+                // 将缓存中的数据，写出去
                 doWrite(outboundBuffer);
             } catch (Throwable t) {
                 handleWriteError(t);

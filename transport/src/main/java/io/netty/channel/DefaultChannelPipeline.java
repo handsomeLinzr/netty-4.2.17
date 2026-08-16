@@ -1169,6 +1169,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return tail.bind(localAddress, promise);
     }
 
+    /**
+     * 连接
+     */
     @Override
     public final ChannelFuture connect(SocketAddress remoteAddress, ChannelPromise promise) {
         return tail.connect(remoteAddress, promise);
@@ -1216,6 +1219,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return tail.writeAndFlush(msg, promise);
     }
 
+    /**
+     * 写数据，从 tail 开始
+     * @param msg
+     * @return
+     */
     @Override
     public final ChannelFuture writeAndFlush(Object msg) {
         return tail.writeAndFlush(msg);
@@ -1703,7 +1711,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
 
         /**
-         * 通道读
+         * 通道读，直接跳到下一个
          * @param ctx
          * @param msg
          */

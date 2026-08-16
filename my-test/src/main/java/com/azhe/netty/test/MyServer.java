@@ -34,6 +34,7 @@ public class MyServer {
 //                .childHandler(new ServerChannelInitializerHttpDemo());
                 .childHandler(new ServerChannelInitializerSend());
 
+            // 等待
             bootstrap.bind("localhost", 8081).sync().channel().closeFuture().sync();
         } catch (Exception e) {
             e.printStackTrace();

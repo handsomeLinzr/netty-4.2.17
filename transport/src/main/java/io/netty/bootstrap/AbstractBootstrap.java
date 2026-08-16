@@ -386,9 +386,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         try {
             // 创建对应类型 Channel
             // 这里获取 NioServerSocketChannel，其中包含了原生的 ServerSocketChannel，在构造函数中处理
-            // 同时原生的 ServerSocketChannel 注册了 accept 事件
+            // 如果是 Bootstrap 则是 NioSocketChannel
             channel = channelFactory.newChannel();
-            // 初始化，然后给当前 pipeline 添加一个初始化监听器
+            // 初始化，
             init(channel);
         } catch (Throwable t) {
             if (channel != null) {

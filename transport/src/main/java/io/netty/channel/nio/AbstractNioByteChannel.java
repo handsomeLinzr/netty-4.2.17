@@ -60,6 +60,9 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
     private boolean inputClosedSeenErrorOnRead;
 
     /**
+     *
+     * 创建一个实例，默认给 OP_READ
+     *
      * Create a new instance
      *
      * @param parent            the parent {@link Channel} by which this instance was created. May be {@code null}
@@ -234,7 +237,12 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         return doWriteInternal(in, in.current());
     }
 
+    /**
+     * 写数据
+     */
     private int doWriteInternal(ChannelOutboundBuffer in, Object msg) throws Exception {
+
+        // ByteBuf 的情况
         if (msg instanceof ByteBuf) {
             ByteBuf buf = (ByteBuf) msg;
             if (!buf.isReadable()) {
@@ -242,6 +250,8 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 return 0;
             }
 
+            // 调用 Java 原生 socket 写出去
+            // 也就是刷新出去的效果了
             final int localFlushedAmount = doWriteBytes(buf);
             if (localFlushedAmount > 0) {
                 in.progress(localFlushedAmount);
@@ -251,6 +261,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 return 1;
             }
         } else if (msg instanceof FileRegion) {
+            // 文件
             FileRegion region = (FileRegion) msg;
             if (region.transferred() >= region.count()) {
                 in.remove();
@@ -272,6 +283,12 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         return WRITE_STATUS_SNDBUF_FULL;
     }
 
+    /**
+     * 写数据出去，即刷新缓存
+     * in 就是缓存的数据
+     * @param in
+     * @throws Exception
+     */
     @Override
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
         int writeSpinCount = config().getWriteSpinCount();
@@ -283,23 +300,33 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 // Directly return here so incompleteWrite(...) is not called.
                 return;
             }
+            // 写数据出去
             writeSpinCount -= doWriteInternal(in, msg);
         } while (writeSpinCount > 0);
 
         incompleteWrite(writeSpinCount < 0);
     }
 
+    /**
+     * 数据内存调整，如果是普通信息，调整成直接内存
+     * 如果是文件，则直接返回
+     * @param msg
+     * @return
+     */
     @Override
     protected final Object filterOutboundMessage(Object msg) {
         if (msg instanceof ByteBuf) {
             ByteBuf buf = (ByteBuf) msg;
             if (buf.isDirect()) {
+                // 如果是直接内存，直接返回
                 return msg;
             }
 
+            // 换成直接内存
             return newDirectBuffer(buf);
         }
 
+        // 文件
         if (msg instanceof FileRegion) {
             return msg;
         }

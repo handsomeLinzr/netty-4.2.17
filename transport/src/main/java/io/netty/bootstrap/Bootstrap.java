@@ -51,6 +51,8 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
     private final BootstrapConfig config = new BootstrapConfig(this);
 
     private ExternalAddressResolver externalResolver;
+
+    // false
     private volatile boolean disableResolver;
     private volatile SocketAddress remoteAddress;
 
@@ -126,9 +128,13 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
     }
 
     /**
+     *
+     * 创建一个连接连向远程
+     *
      * Connect a {@link Channel} to the remote peer.
      */
     public ChannelFuture connect(String inetHost, int inetPort) {
+        // 连接
         return connect(InetSocketAddress.createUnresolved(inetHost, inetPort));
     }
 
@@ -140,11 +146,18 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
     }
 
     /**
+     *
+     * 创建连接
+     *
      * Connect a {@link Channel} to the remote peer.
      */
     public ChannelFuture connect(SocketAddress remoteAddress) {
+        // 校验
         ObjectUtil.checkNotNull(remoteAddress, "remoteAddress");
         validate();
+
+        // 连接
+        // config.localAddress() 默认空
         return doResolveAndConnect(remoteAddress, config.localAddress());
     }
 
@@ -161,7 +174,9 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
      * @see #connect()
      */
     private ChannelFuture doResolveAndConnect(final SocketAddress remoteAddress, final SocketAddress localAddress) {
+        // 初始化并注册
         final ChannelFuture regFuture = initAndRegister();
+        // 获取客户端连接, NioSocketChannel
         final Channel channel = regFuture.channel();
 
         // regFuture 判断是否已经完成
@@ -206,9 +221,10 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
                 return promise;
             }
 
+            // 获取当前的线程
             final EventLoop eventLoop = channel.eventLoop();
             AddressResolver<SocketAddress> resolver;
-            try {
+            try {  // DefaultAddressResolverGroup.INSTANCE
                 resolver = ExternalAddressResolver.getOrDefault(externalResolver).getResolver(eventLoop);
             } catch (Throwable cause) {
                 channel.close();
@@ -231,6 +247,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
                     channel.close();
                     promise.setFailure(resolveFailureCause);
                 } else {
+                    // 开始连接
                     // Succeeded to resolve immediately; cached? (or did a blocking lookup)
                     doConnect(resolveFuture.getNow(), localAddress, promise);
                 }
@@ -262,23 +279,44 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
             @Override
             public void run() {
                 if (localAddress == null) {
+
+                    // 连接
                     channel.connect(remoteAddress, connectPromise);
                 } else {
                     channel.connect(remoteAddress, localAddress, connectPromise);
                 }
+
+                // 添加监听
                 connectPromise.addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
             }
         });
     }
 
+    /**
+     *
+     * 客户端初始化
+     * 1.给 pipeline 添加自定义 handler
+     * 2.设置 options 参数
+     * 3.设置 attributes 参数
+     *
+     * @param channel
+     * @throws Throwable
+     */
     @Override
     void init(Channel channel) throws Throwable {
+
+        // DefaultChannelPipeline
         ChannelPipeline p = channel.pipeline();
+        // 添加前边自定义的 handler
         p.addLast(config.handler());
 
+        // options 配置
         setChannelOptions(channel, newOptionsArray(), logger);
 
+        // attributes 参数配置
         setAttributes(channel, newAttributesArray());
+
+        // 获取扩展，默认空
         Collection<ChannelInitializerExtension> extensions = getInitializerExtensions();
         if (!extensions.isEmpty()) {
             for (ChannelInitializerExtension extension : extensions) {

@@ -267,6 +267,11 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         return this;
     }
 
+    /**
+     *
+     * 等待异步处理唤醒
+     *
+     */
     @Override
     public Promise<V> await() throws InterruptedException {
         if (isDone()) {
@@ -281,14 +286,18 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
 
         synchronized (this) {
             while (!isDone()) {
+                // 增加等待数量
                 incWaiters();
                 try {
+                    // 等待唤醒
                     wait();
                 } finally {
+                    // 被唤醒了，减小等待数量
                     decWaiters();
                 }
             }
         }
+        // 返回自己
         return this;
     }
 
@@ -434,8 +443,11 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
 
     @Override
     public Promise<V> sync() throws InterruptedException {
+        // 等待
         await();
+        // 异常检测
         rethrowIfFailed();
+        // 返回
         return this;
     }
 

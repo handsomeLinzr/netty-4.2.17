@@ -88,6 +88,7 @@ public final class SocketUtils {
             return AccessController.doPrivileged(new PrivilegedExceptionAction<Boolean>() {
                 @Override
                 public Boolean run() throws IOException {
+                    // 连接远程地址
                     return socketChannel.connect(remoteAddress);
                 }
             });

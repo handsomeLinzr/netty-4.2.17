@@ -151,6 +151,9 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
     /**
      * 初始化服务端通道
+     *
+     * 然后给当前 pipeline 添加一个初始化监听器
+     *
      * @param channel
      * @throws Throwable
      */
@@ -274,21 +277,31 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             };
         }
 
+        /**
+         * 在客户端通道刚连接后，调用 head.fireChannelRead，就会调用到这里来
+         * @param ctx
+         * @param msg
+         */
         @Override
         @SuppressWarnings("unchecked")
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            // NioSocketChannel 客户端连接
             final Channel child = (Channel) msg;
 
+            // 给客户端的连接加上处理器 childHandler
             child.pipeline().addLast(childHandler);
 
             try {
+                // 设置 options 参数
                 setChannelOptions(child, childOptions, logger);
             } catch (Throwable cause) {
                 forceClose(child, cause);
                 return;
             }
+            // 设置 attributes
             setAttributes(child, childAttrs);
 
+            // 扩张，一般是默认是空的，跳过
             if (!extensions.isEmpty()) {
                 for (ChannelInitializerExtension extension : extensions) {
                     try {
@@ -300,6 +313,8 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             }
 
             try {
+                // 调用 childGroup（也就是 worker 事件循环组）注册 child
+                // 并添加监听，如果失败了，则强制关闭
                 childGroup.register(child).addListener(future -> {
                     if (!future.isSuccess()) {
                         forceClose(child, future.cause());

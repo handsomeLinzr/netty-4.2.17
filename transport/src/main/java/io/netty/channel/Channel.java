@@ -256,6 +256,11 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
         return this;
     }
 
+    /**
+     * 调用 channel 写数据
+     * @param msg
+     * @return
+     */
     @Override
     default ChannelFuture writeAndFlush(Object msg) {
         return pipeline().writeAndFlush(msg);
@@ -342,6 +347,10 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
         return pipeline().bind(localAddress);
     }
 
+    /**
+     * 创建和当前 channel 关联的 异步器
+     * @return
+     */
     @Override
     default ChannelPromise newPromise() {
         return pipeline().newPromise();
