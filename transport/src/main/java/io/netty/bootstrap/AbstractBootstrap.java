@@ -400,6 +400,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         // register： 从 Bootstrap 中选择一个 eventLoop
         // 用了 EventLoopGroup 去 register
         // 其实最后就是从选择器中，next() 得到下一个的 NioEventLoop，然后调用到 SingleThreadEventExecutor.register
+        // 最后回调到 pipeline.fireChannelRegistered();
         final ChannelFuture regFuture = config().group().register(channel);
 
         // 异常处理

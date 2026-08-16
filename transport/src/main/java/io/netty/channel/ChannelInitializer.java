@@ -113,6 +113,8 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
      */
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+
+        // 判断当前通道是否已经注册，是的话则初始化通道
         if (ctx.channel().isRegistered()) {
             // This should always be true with our current DefaultChannelPipeline implementation.
             // The good thing about calling initChannel(...) in handlerAdded(...) is that there will be no ordering
@@ -120,6 +122,8 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
             // will be added in the expected order.
             if (initChannel(ctx)) {
 
+                // 调用初始化通道，传入 ChannelHandlerContext
+                // 当初始化完成后，需要将当前 handlerContext 移除
                 // We are done with init the Channel, removing the initializer now.
                 removeState(ctx);
             }
@@ -138,12 +142,15 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
         if (initMap.add(ctx)) { // Guard against re-entrance.
             try {
                 // 内部调用 initChannel 抽象方法
+                // 这里主要会调用到自定义的那个初始化方法
                 initChannel((C) ctx.channel());
             } catch (Throwable cause) {
                 // Explicitly route the failure into the pipeline. Re-entrance is guarded by
                 // the initMap.add(ctx) check above; the finally block below removes the handler.
                 exceptionCaught(ctx, cause);
             } finally {
+                // 将自身这个 channelHandler 从 pipeline 中移除
+                // 因为已经初始化了，后续不用再在 pipeline 处理，所以移除
                 if (!ctx.isRemoved()) {
                     ctx.pipeline().remove(this);
                 }

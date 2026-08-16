@@ -1624,6 +1624,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     }
 
     private abstract static class PendingHandlerCallback implements Runnable {
+        // 一般都是 DefaultChannelHandlerContext
         final AbstractChannelHandlerContext ctx;
         PendingHandlerCallback next;
 

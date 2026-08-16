@@ -436,7 +436,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                     // 设置返回结果，将 promise 设置进去
                     safeSetSuccess(promise);
 
-                    // 注册事件
+                    // 传播注册事件
                     pipeline.fireChannelRegistered();
                     // Only fire a channelActive if the channel has never been registered. This prevents firing
                     // multiple channel actives if the channel is deregistered and re-registered.
