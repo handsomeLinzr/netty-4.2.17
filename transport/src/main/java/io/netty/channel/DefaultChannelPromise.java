@@ -26,9 +26,16 @@ import static io.netty.util.internal.ObjectUtil.checkNotNull;
 /**
  * The default {@link ChannelPromise} implementation.  It is recommended to use {@link Channel#newPromise()} to create
  * a new {@link ChannelPromise} rather than calling the constructor explicitly.
+ *
+ * 默认的 ChannelPromise 实现
+ * 建议使用 Channel#newPromise() 去创建
+ *
  */
 public class DefaultChannelPromise extends DefaultPromise<Void> implements ChannelPromise, FlushCheckpoint {
 
+    /**
+     * 当前异步器绑定的 通道
+     */
     private final Channel channel;
     private long checkpoint;
 
@@ -47,6 +54,8 @@ public class DefaultChannelPromise extends DefaultPromise<Void> implements Chann
      *
      * @param channel
      *        the {@link Channel} associated with this future
+     *
+     * 创建一个新的实例，在注册的时候会调用到这个
      */
     public DefaultChannelPromise(Channel channel, EventExecutor executor) {
         super(executor);
@@ -55,6 +64,7 @@ public class DefaultChannelPromise extends DefaultPromise<Void> implements Chann
 
     @Override
     protected EventExecutor executor() {
+        // 获取对应的单线程事件循环组
         EventExecutor e = super.executor();
         if (e == null) {
             return channel().eventLoop();

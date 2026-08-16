@@ -34,6 +34,8 @@ public class DefaultThreadFactory implements ThreadFactory {
     private final String prefix;
     private final boolean daemon;
     private final int priority;
+
+    // 默认 null
     protected final ThreadGroup threadGroup;
 
     public DefaultThreadFactory(Class<?> poolType) {
@@ -67,17 +69,21 @@ public class DefaultThreadFactory implements ThreadFactory {
      * @param priority
      */
     public DefaultThreadFactory(Class<?> poolType, boolean daemon, int priority) {
+        // 当前调用类的简短类名
+        // 是否守护线程，默认 false
+        // 线程的等级
         this(toPoolName(poolType), daemon, priority);
     }
 
     /**
-     * 线程名称
+     * 获取 poolType 对应的简短名称，首字母小写
      * @param poolType
      * @return
      */
     public static String toPoolName(Class<?> poolType) {
         ObjectUtil.checkNotNull(poolType, "poolType");
 
+        // 获取对应的普通名称
         String poolName = StringUtil.simpleClassName(poolType);
         switch (poolName.length()) {
             case 0:
@@ -96,23 +102,37 @@ public class DefaultThreadFactory implements ThreadFactory {
     public DefaultThreadFactory(String poolName, boolean daemon, int priority, ThreadGroup threadGroup) {
         ObjectUtil.checkNotNull(poolName, "poolName");
 
+        // 判断只能 1 到 10 之间
         if (priority < Thread.MIN_PRIORITY || priority > Thread.MAX_PRIORITY) {
             throw new IllegalArgumentException(
                     "priority: " + priority + " (expected: Thread.MIN_PRIORITY <= priority <= Thread.MAX_PRIORITY)");
         }
 
+        // 线程名前缀，nioEventLoopGroup-n-
+        // 每个 DefaultThreadFactory 创建出来的线程的前缀都是一样的
         prefix = poolName + '-' + poolId.incrementAndGet() + '-';
         this.daemon = daemon;
         this.priority = priority;
+        // null
         this.threadGroup = threadGroup;
     }
 
+    /**
+     * 默认的线程工厂
+     */
     public DefaultThreadFactory(String poolName, boolean daemon, int priority) {
         this(poolName, daemon, priority, null);
     }
 
+    /**
+     * 创建新线程的逻辑
+     * @return
+     */
     @Override
     public Thread newThread(Runnable r) {
+        // 线程名称：线程名前缀，nioEventLoopGroup-n-x
+        // runnable：包装为 FastThreadLocalRunnable 处理，
+        // 线程 t，被包装了 FastThreadLocalRunnable 的 FastThreadLocalThread 线程
         Thread t = newThread(FastThreadLocalRunnable.wrap(r), prefix + nextId.incrementAndGet());
         try {
             if (t.isDaemon() != daemon) {

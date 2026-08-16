@@ -400,13 +400,16 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                     writeSpinCount -= doWrite0(in);
                     break;
                 case 1: {
+                    // 单数据
                     // Only one ByteBuf so use non-gathering write
                     // Zero length buffers are not added to nioBuffers by ChannelOutboundBuffer, so there is no need
                     // to check if the total size of all the buffers is non-zero.
                     ByteBuffer buffer = nioBuffers[0];
                     int attemptedBytes = buffer.remaining();
                     final int localWrittenBytes = ch.write(buffer);
+
                     if (localWrittenBytes <= 0) {
+                        // 缓冲区满了写不了了，注册写事件，写更多
                         incompleteWrite(true);
                         return;
                     }
@@ -416,6 +419,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                     break;
                 }
                 default: {
+                    // 批量数据
                     // Zero length buffers are not added to nioBuffers by ChannelOutboundBuffer, so there is no need
                     // to check if the total size of all the buffers is non-zero.
                     // We limit the max amount to int above so cast is safe
@@ -435,6 +439,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
             }
         } while (writeSpinCount > 0);
 
+        // 写了 16 次数据，还没有写完，直接 scheduled 一个新的 flush task 出来，而不是写事件
         incompleteWrite(writeSpinCount < 0);
     }
 

@@ -33,10 +33,11 @@ import java.util.concurrent.ThreadFactory;
  */
 public abstract class SingleThreadEventLoop extends SingleThreadEventExecutor implements EventLoop {
 
+    // Integer.MAX_VALUE
     protected static final int DEFAULT_MAX_PENDING_TASKS = Math.max(16,
             SystemPropertyUtil.getInt("io.netty.eventLoop.maxPendingTasks", Integer.MAX_VALUE));
 
-    // 任务队列，构造函数设置，LinkedBlockingQueue
+    // 任务队列，构造函数设置，mpsc 队列
     private final Queue<Runnable> tailTasks;
 
     protected SingleThreadEventLoop(EventLoopGroup parent, ThreadFactory threadFactory, boolean addTaskWakesUp) {
@@ -110,15 +111,30 @@ public abstract class SingleThreadEventLoop extends SingleThreadEventExecutor im
         return (EventLoop) super.next();
     }
 
+    /**
+     * 注册通道
+     * @param channel
+     * @return
+     */
     @Override
     public ChannelFuture register(Channel channel) {
+        // new DefaultChannelPromise(channel, this) 其实就是设置 channel 和 SingleThreadEventExecutor 绑定给到 DefaultChannelPromise 实例
         return register(new DefaultChannelPromise(channel, this));
     }
 
+    /**
+     * 注册通道
+     * @param promise
+     * @return
+     */
     @Override
     public ChannelFuture register(final ChannelPromise promise) {
         ObjectUtil.checkNotNull(promise, "promise");
+
+        // 调用 NioMessageUnsafe 执行 register 方法
         promise.channel().unsafe().register(this, promise);
+
+        // 返回异步器
         return promise;
     }
 

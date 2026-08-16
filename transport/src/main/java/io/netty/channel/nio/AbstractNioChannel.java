@@ -55,9 +55,16 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     private static final InternalLogger logger =
             InternalLoggerFactory.getInstance(AbstractNioChannel.class);
 
+    // 对应的 channel 通道，Java 原生 Channel
     private final SelectableChannel ch;
+
+    //  OP_ACCEPT
     protected final int readInterestOp;
+
+    // 对应 server 的情况，默认刚开始是 OP_ACCEPT
     protected final NioIoOps readOps;
+
+    // 注册的结果，注册后在回调中被设置
     volatile IoRegistration registration;
     boolean readPending;
     private final Runnable clearReadPendingRunnable = new Runnable() {
@@ -87,11 +94,13 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     }
 
     protected AbstractNioChannel(Channel parent, SelectableChannel ch, NioIoOps readOps) {
+        // 调用父类，创建 pipeline 和 unsafe
         super(parent);
         this.ch = ch;
         this.readInterestOp = ObjectUtil.checkNotNull(readOps, "readOps").value;
         this.readOps = readOps;
         try {
+            // 设置非阻塞
             ch.configureBlocking(false);
         } catch (IOException e) {
             try {
@@ -455,10 +464,18 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         return loop instanceof IoEventLoop && ((IoEventLoopGroup) loop).isCompatible(AbstractNioUnsafe.class);
     }
 
+    /**
+     * 注册，然后唤醒 promise 处理
+     * @param promise {@link ChannelPromise} that must be notified once done to continue the registration.
+     */
     @SuppressWarnings("unchecked")
     @Override
     protected void doRegister(ChannelPromise promise) {
         assert registration == null;
+
+        // 调用事件循环组处理
+        // 注册 unsafe
+        // 添加监听器，逻辑为：如果成功了，调用 promise.setSuccess，失败了则调用 promise.setFailure
         ((IoEventLoop) eventLoop()).register((AbstractNioUnsafe) unsafe()).addListener(f -> {
             if (f.isSuccess()) {
                 registration = (IoRegistration) f.getNow();

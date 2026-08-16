@@ -74,8 +74,13 @@ public abstract class MultithreadEventLoopGroup extends MultithreadEventExecutor
         super(nThreads == 0 ? DEFAULT_EVENT_LOOP_THREADS : nThreads, executor, chooserFactory, args);
     }
 
+    /**
+     * 线程工厂处理
+     * @return
+     */
     @Override
     protected ThreadFactory newDefaultThreadFactory() {
+        // getClass() 得到当前类，也就是一开始调用进来的类
         return new DefaultThreadFactory(getClass(), Thread.MAX_PRIORITY);
     }
 
@@ -87,6 +92,11 @@ public abstract class MultithreadEventLoopGroup extends MultithreadEventExecutor
     @Override
     protected abstract EventLoop newChild(Executor executor, Object... args) throws Exception;
 
+    /**
+     * 时间循环组注册通道
+     * @param channel
+     * @return
+     */
     @Override
     public ChannelFuture register(Channel channel) {
         return next().register(channel);

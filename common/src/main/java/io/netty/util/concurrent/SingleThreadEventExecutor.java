@@ -53,7 +53,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  */
 public abstract class SingleThreadEventExecutor extends AbstractScheduledEventExecutor implements OrderedEventExecutor {
-
+    // 默认没设置，得到 Integer.MAX_VALUE
     static final int DEFAULT_MAX_PENDING_EXECUTOR_TASKS = Math.max(16,
             SystemPropertyUtil.getInt("io.netty.eventexecutor.maxPendingTasks", Integer.MAX_VALUE));
 
@@ -74,7 +74,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
             // Do nothing.
         }
     };
-
+    // 获取对应的原子处理属性
     private static final AtomicIntegerFieldUpdater<SingleThreadEventExecutor> STATE_UPDATER =
             AtomicIntegerFieldUpdater.newUpdater(SingleThreadEventExecutor.class, "state");
     private static final AtomicReferenceFieldUpdater<SingleThreadEventExecutor, ThreadProperties> PROPERTIES_UPDATER =
@@ -86,20 +86,31 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
             AtomicIntegerFieldUpdater.newUpdater(SingleThreadEventExecutor.class, "consecutiveIdleCycles");
     private static final AtomicIntegerFieldUpdater<SingleThreadEventExecutor> CONSECUTIVE_BUSY_CYCLES_UPDATER =
             AtomicIntegerFieldUpdater.newUpdater(SingleThreadEventExecutor.class, "consecutiveBusyCycles");
+
+    // 当前线程的任务队列  mpsc 队列
     private final Queue<Runnable> taskQueue;
 
     private volatile Thread thread;
     @SuppressWarnings("unused")
     private volatile ThreadProperties threadProperties;
+
+    // 执行器
+    // 通过构造函数  this.executor = ThreadExecutorMap.apply(executor, this) 设置，（ThreadExecutorMap$1）
+    // 内部的 executor 就是 ThreadPerTaskExecutor
     private final Executor executor;
+
     private volatile boolean interrupted;
 
     private final Lock processingLock = new ReentrantLock();
     private final CountDownLatch threadLock = new CountDownLatch(1);
     private final Set<Runnable> shutdownHooks = new LinkedHashSet<Runnable>();
+
+    // 默认 false
     private final boolean addTaskWakesUp;
     private final int maxPendingTasks;
     private final RejectedExecutionHandler rejectedExecutionHandler;
+
+    // true
     private final boolean supportSuspension;
 
     // A running total of nanoseconds this executor has spent in an "active" state.
@@ -241,6 +252,8 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         this.addTaskWakesUp = addTaskWakesUp;
         this.supportSuspension = supportSuspension;
         this.maxPendingTasks = DEFAULT_MAX_PENDING_EXECUTOR_TASKS;
+
+        // 创建对应的执行器，this = NioEventLoop
         this.executor = ThreadExecutorMap.apply(executor, this);
         this.taskQueue = ObjectUtil.checkNotNull(taskQueue, "taskQueue");
         this.rejectedExecutionHandler = ObjectUtil.checkNotNull(rejectedHandler, "rejectedHandler");
@@ -403,7 +416,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
      */
     protected void addTask(Runnable task) {
         ObjectUtil.checkNotNull(task, "task");
-        if (!offerTask(task)) {
+        if (!offerTask(task)) {  // 添加到 mpsc 队列
             reject(task);
         }
     }
@@ -997,6 +1010,10 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         lazyExecute0(task);
     }
 
+    /**
+     * 执行任务
+     * @param task
+     */
     private void execute0(@Schedule Runnable task) {
         ObjectUtil.checkNotNull(task, "task");
         execute(task, wakesUpForTask(task));
@@ -1032,8 +1049,12 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     }
 
     private void execute(Runnable task, boolean immediate) {
+        // 先判断当前线程是否属于是当前循环组的
         boolean inEventLoop = inEventLoop();
+        // 将任务添加到 mpsc 队列
         addTask(task);
+
+        // 如果不在循环组，则启动线程
         if (!inEventLoop) {
             startThread();
             if (isShutdown()) {
@@ -1053,6 +1074,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
             }
         }
 
+        // 唤醒
         if (!addTaskWakesUp && immediate) {
             wakeup(inEventLoop);
         }
@@ -1150,11 +1172,14 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     private void startThread() {
         int currentState = state;
         if (currentState == ST_NOT_STARTED || currentState == ST_SUSPENDED) {
+            // 设置 state 为 ST_STARTED
             if (STATE_UPDATER.compareAndSet(this, currentState, ST_STARTED)) {
+                // 重置
                 resetIdleCycles();
                 resetBusyCycles();
                 boolean success = false;
                 try {
+                    // 启动线程
                     doStartThread();
                     success = true;
                 } finally {
@@ -1184,7 +1209,10 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         return false;
     }
 
+    // 启动线程
     private void doStartThread() {
+        // executor = ThreadExecutorMap
+        // 这里最后生成的线程，其实就是 nioEventLoopGroup-n-x
         executor.execute(new Runnable() {
             @Override
             public void run() {

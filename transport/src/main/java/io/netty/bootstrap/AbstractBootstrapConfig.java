@@ -31,6 +31,7 @@ import java.util.Map;
  */
 public abstract class AbstractBootstrapConfig<B extends AbstractBootstrap<B, C>, C extends Channel> {
 
+    // 对应的 config 所属的 serverBootstrap
     protected final B bootstrap;
 
     protected AbstractBootstrapConfig(B bootstrap) {

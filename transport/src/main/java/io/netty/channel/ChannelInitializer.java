@@ -66,20 +66,30 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
      * @throws Exception    is thrown if an error occurs. In that case it will be handled by
      *                      {@link #exceptionCaught(ChannelHandlerContext, Throwable)} which will by default close
      *                      the {@link Channel}.
+     *
+     *
+     *
+     * 子类实现，对 channel 的初始化的方法
      */
     protected abstract void initChannel(C ch) throws Exception;
 
+
+    // 通道注册
     @Override
     @SuppressWarnings("unchecked")
     public final void channelRegistered(ChannelHandlerContext ctx) throws Exception {
         // Normally this method will never be called as handlerAdded(...) should call initChannel(...) and remove
         // the handler.
+        // 先调用 initChannel 初始化
         if (initChannel(ctx)) {
+
+            // 如果初始化完成了，继续往下传播 ChannelRegistered 事件
             // we called initChannel(...) so we need to call now pipeline.fireChannelRegistered() to ensure we not
             // miss an event.
             ctx.pipeline().fireChannelRegistered();
 
             // We are done with init the Channel, removing all the state for the Channel now.
+            // 移除当前这个 channelHandler，因为只是初始化用，后边不用了
             removeState(ctx);
         } else {
             // Called initChannel(...) before which is the expected behavior, so just forward the event.
@@ -121,10 +131,13 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
         initMap.remove(ctx);
     }
 
+    // 初始化
     @SuppressWarnings("unchecked")
     private boolean initChannel(ChannelHandlerContext ctx) throws Exception {
+        // ctx 只能被调用一次
         if (initMap.add(ctx)) { // Guard against re-entrance.
             try {
+                // 内部调用 initChannel 抽象方法
                 initChannel((C) ctx.channel());
             } catch (Throwable cause) {
                 // Explicitly route the failure into the pipeline. Re-entrance is guarded by

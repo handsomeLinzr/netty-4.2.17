@@ -18,27 +18,43 @@ package io.netty.channel;
 /**
  * {@link ChannelHandler} which adds callbacks for state changes. This allows the user
  * to hook in to state changes easily.
+ *
+ * 入站处理
+ *
  */
 public interface ChannelInboundHandler extends ChannelHandler {
 
     /**
      * The {@link Channel} of the {@link ChannelHandlerContext} was registered with its {@link EventLoop}
+     *
+     * 有注册请求
+     *
      */
     void channelRegistered(ChannelHandlerContext ctx) throws Exception;
 
     /**
      * The {@link Channel} of the {@link ChannelHandlerContext} was unregistered from its {@link EventLoop}
+     *
+     * 注销请求
+     *
      */
     void channelUnregistered(ChannelHandlerContext ctx) throws Exception;
 
     /**
      * The {@link Channel} of the {@link ChannelHandlerContext} is now active
+     *
+     * 有连接活跃请求，当channel 已经 连接或者绑定 并且已经就绪
+     *
      */
     void channelActive(ChannelHandlerContext ctx) throws Exception;
 
     /**
      * The {@link Channel} of the {@link ChannelHandlerContext} was registered is now inactive and reached its
      * end of lifetime.
+     *
+     *
+     * 当channel失活
+     *
      */
     void channelInactive(ChannelHandlerContext ctx) throws Exception;
 

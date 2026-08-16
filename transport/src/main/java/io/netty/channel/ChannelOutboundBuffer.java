@@ -92,6 +92,13 @@ public final class ChannelOutboundBuffer {
     private static final AtomicLongFieldUpdater<ChannelOutboundBuffer> TOTAL_PENDING_SIZE_UPDATER =
             AtomicLongFieldUpdater.newUpdater(ChannelOutboundBuffer.class, "totalPendingSize");
 
+
+    /**
+     * 统计待发送的字节数
+     * 为什么不用 AtomicLong？
+     *      为了减少字节数，long = 16字节，AtomicLong 是一个对象，未开启指针压缩是32位
+     *      当前 ChannelOutboundBuffer 会被很多次创建，所以能减少空间占用
+     */
     @SuppressWarnings("UnusedDeclaration")
     private volatile long totalPendingSize;
 

@@ -195,13 +195,16 @@ public class MultiThreadIoEventLoopGroup extends MultithreadEventLoopGroup imple
         IoHandlerFactory handlerFactory = (IoHandlerFactory) args[0];
         Object[] argsCopy;
         if (args.length > 1) {
+
+            // 默认最后一个参数是拒绝策略，单例那个
             argsCopy = new Object[args.length - 1];
             System.arraycopy(args, 1, argsCopy, 0, argsCopy.length);
         } else {
-            // 空参数，默认这里
+
             argsCopy = EmptyArrays.EMPTY_OBJECTS;
         }
-        // 创建 child
+
+        // 创建 child，对应是 SingleThreadIoEventLoop
         return newChild(executor, handlerFactory, argsCopy);
     }
 

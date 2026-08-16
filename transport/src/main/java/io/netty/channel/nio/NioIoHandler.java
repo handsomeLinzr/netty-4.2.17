@@ -127,11 +127,14 @@ public final class NioIoHandler implements IoHandler {
     // 默认是对应的 DefaultSelectStrategy.INSTANCE
     private final SelectStrategy selectStrategy;
 
-    // 构造器设置的线程池
+    // 构造器设置的executor，默认 NioEventLoop
     private final ThreadAwareExecutor executor;
     private int cancelledKeys;
     private boolean needsToSelectAgain;
 
+    /**
+     * 创建 io 处理器
+     */
     private NioIoHandler(ThreadAwareExecutor executor, SelectorProvider selectorProvider,
                          SelectStrategy strategy) {
         // 赋值处理
@@ -368,12 +371,16 @@ public final class NioIoHandler implements IoHandler {
 
     final class DefaultNioRegistration implements IoRegistration {
         private final AtomicBoolean canceled = new AtomicBoolean();
+
+        // unsafe
         private final NioIoHandle handle;
-        private volatile SelectionKey key;
+        private volatile SelectionKey key;  // javaSocketChannel.register 的返回
 
         DefaultNioRegistration(ThreadAwareExecutor executor, NioIoHandle handle, NioIoOps initialOps, Selector selector)
                 throws IOException {
             this.handle = handle;
+            // 也就是 channel.register 方法, 调用的 java 原生 channel
+            // this = NioIoHandler
             key = handle.selectableChannel().register(selector, initialOps.value, this);
         }
 
@@ -440,16 +447,26 @@ public final class NioIoHandler implements IoHandler {
         }
     }
 
+    /**
+     *
+     * 注册
+     *
+     * @param handle        the {@link IoHandle} to register.
+     * @return
+     * @throws Exception
+     */
     @Override
     public IoRegistration register(IoHandle handle)
             throws Exception {
+        // handle = NioMessageUnsafe
         NioIoHandle nioHandle = nioHandle(handle);
         NioIoOps ops = NioIoOps.NONE;
         boolean selected = false;
         for (;;) {
             try {
+                // channel 注册 selector，先给到 NioIoOps.NONE 监听事件，即没有监听任务事件
                 IoRegistration registration = new DefaultNioRegistration(executor, nioHandle, ops, unwrappedSelector());
-                handle.registered();
+                handle.registered();   // 默认空实现
                 return registration;
             } catch (CancelledKeyException e) {
                 if (!selected) {
@@ -870,6 +887,7 @@ public final class NioIoHandler implements IoHandler {
                  * 创建 nio 处理工厂
                  * selectorProvider - 对应系统的 selector
                  * selectStrategyFactory.newSelectStrategy() 得到对应的 DefaultSelectStrategy.INSTANCE，单例对象
+                 * 创建 NioIoHandler 方法后，会调用  electorTuple.selector 获取选择器
                  */
                 return new NioIoHandler(executor, selectorProvider, selectStrategyFactory.newSelectStrategy());
             }

@@ -35,10 +35,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements IoEventLoop {
 
-    // TODO: Is this a sensible default ?
+    // TODO: Is this a sensible default ?    1000 ms
     private static final long DEFAULT_MAX_TASK_PROCESSING_QUANTUM_NS = TimeUnit.MILLISECONDS.toNanos(Math.max(100,
             SystemPropertyUtil.getInt("io.netty.eventLoop.maxTaskProcessingQuantumMs", 1000)));
 
+    // 默认 1000 ms
     private final long maxTaskProcessingQuantumNs;
     private final IoHandlerContext context = new IoHandlerContext() {
         @Override
@@ -70,9 +71,10 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
         }
     };
 
-    // 创建对应的 NioIoHandler
+    // 创建对应的 NioIoHandler，包装了 selector 选择器
     private final IoHandler ioHandler;
 
+    // 注册数量，在 registerForIo0 方法中会自增
     private final AtomicInteger numRegistrations = new AtomicInteger();
 
     /**
@@ -102,7 +104,7 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
     public SingleThreadIoEventLoop(IoEventLoopGroup parent, Executor executor, IoHandlerFactory ioHandlerFactory) {
         super(parent, executor, false,
                 ObjectUtil.checkNotNull(ioHandlerFactory, "ioHandlerFactory").isChangingThreadSupported());
-        // 时间？
+        // 默认 1000 ms
         this.maxTaskProcessingQuantumNs = DEFAULT_MAX_TASK_PROCESSING_QUANTUM_NS;
         // 创建 NioIoHandler
         this.ioHandler = ioHandlerFactory.newHandler(this);
@@ -179,15 +181,24 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
      * @param tailTaskQueue             the {@link Queue} used for storing tail pending tasks.
      * @param rejectedExecutionHandler  the {@link RejectedExecutionHandler} that handles when more tasks are added
      *                                  then allowed.
+     *
+     *
+     * 创建一个实例
+     *
      */
     protected SingleThreadIoEventLoop(IoEventLoopGroup parent, Executor executor,
                                       IoHandlerFactory ioHandlerFactory, Queue<Runnable> taskQueue,
                                       Queue<Runnable> tailTaskQueue,
                                       RejectedExecutionHandler rejectedExecutionHandler) {
         super(parent, executor, false,
-                ObjectUtil.checkNotNull(ioHandlerFactory, "ioHandlerFactory").isChangingThreadSupported(),
+                ObjectUtil.checkNotNull(ioHandlerFactory, "ioHandlerFactory").isChangingThreadSupported(),  // true
                 taskQueue, tailTaskQueue, rejectedExecutionHandler);
+
+        // DEFAULT_MAX_TASK_PROCESSING_QUANTUM_NS =
         this.maxTaskProcessingQuantumNs = DEFAULT_MAX_TASK_PROCESSING_QUANTUM_NS;
+
+        // new NioIoHandler(executor, selectorProvider, selectStrategyFactory.newSelectStrategy());
+        // 其中包装了 selector 选择器
         this.ioHandler = ioHandlerFactory.newHandler(this);
     }
 
@@ -196,10 +207,13 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
         assert inEventLoop();
         ioHandler.initialize();
         do {
+            // io 执行
             runIo();
             if (isShuttingDown()) {
                 ioHandler.prepareToDestroy();
             }
+
+            // 执行所有任务
             // Now run all tasks for the maximum configured amount of time before trying to run IO again.
             runAllTasks(maxTaskProcessingQuantumNs);
 
@@ -233,15 +247,28 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
         return this;
     }
 
+    /**
+     * server 注册
+     * handle 给的是 unsafe
+     * @param handle        the {@link IoHandle} to register.
+     * @return
+     */
     @Override
     public final Future<IoRegistration> register(final IoHandle handle) {
+        // 创建一个异步器 DefaultPromise
         Promise<IoRegistration> promise = newPromise();
         if (inEventLoop()) {
+
+            // 当前在线程组中的情况
+            // 注册
+            // promise 又是一个新的 异步器
             registerForIo0(handle, promise);
         } else {
+            // 不在的情况
             execute(() -> registerForIo0(handle, promise));
         }
 
+        // 返回异步器
         return promise;
     }
 
@@ -250,16 +277,22 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
         return numRegistrations.get();
     }
 
+    // io 线程注册
     private void registerForIo0(final IoHandle handle, Promise<IoRegistration> promise) {
         assert inEventLoop();
         final IoRegistration registration;
         try {
+            /**
+             * 注册
+             */
             registration = ioHandler.register(handle);
         } catch (Exception e) {
             promise.setFailure(e);
             return;
         }
+        // 当前事件组中的注册数量 +1
         numRegistrations.incrementAndGet();
+        // 唤醒 promise
         promise.setSuccess(new IoRegistrationWrapper(registration));
     }
 

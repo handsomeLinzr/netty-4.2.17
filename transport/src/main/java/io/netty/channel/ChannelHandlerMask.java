@@ -54,12 +54,19 @@ final class ChannelHandlerMask {
     static final int MASK_WRITE = 1 << 15;
     static final int MASK_FLUSH = 1 << 16;
 
+    // inbound 低第2位到第9位
     static final int MASK_ONLY_INBOUND =  MASK_CHANNEL_REGISTERED |
             MASK_CHANNEL_UNREGISTERED | MASK_CHANNEL_ACTIVE | MASK_CHANNEL_INACTIVE | MASK_CHANNEL_READ |
             MASK_CHANNEL_READ_COMPLETE | MASK_USER_EVENT_TRIGGERED | MASK_CHANNEL_WRITABILITY_CHANGED;
+
+    // 所有 inbound  低第1位到第9位
     private static final int MASK_ALL_INBOUND = MASK_EXCEPTION_CAUGHT | MASK_ONLY_INBOUND;
+
+    // outbound 低第10位到第17位
     static final int MASK_ONLY_OUTBOUND =  MASK_BIND | MASK_CONNECT | MASK_DISCONNECT |
             MASK_CLOSE | MASK_DEREGISTER | MASK_READ | MASK_WRITE | MASK_FLUSH;
+
+    // 所有 outbound  低1位 + 低第10位到第17位
     private static final int MASK_ALL_OUTBOUND = MASK_EXCEPTION_CAUGHT | MASK_ONLY_OUTBOUND;
 
     private static final FastThreadLocal<Map<Class<? extends ChannelHandler>, Integer>> MASKS =
@@ -77,7 +84,12 @@ final class ChannelHandlerMask {
         // Try to obtain the mask from the cache first. If this fails calculate it and put it in the cache for fast
         // lookup in the future.
         Map<Class<? extends ChannelHandler>, Integer> cache = MASKS.get();
+        // 先从 MASKS 获取缓存，从缓存中获取
         Integer mask = cache.get(clazz);
+
+        // 如果没有，则调用 mask0 获取对应的标识
+        // 然后缓存
+        // 得到一个标识了类中方法的 int 标识
         if (mask == null) {
             mask = mask0(clazz);
             cache.put(clazz, mask);
@@ -86,14 +98,19 @@ final class ChannelHandlerMask {
     }
 
     /**
+     *
+     * 计算 mask 标识
+     *
      * Calculate the {@code executionMask}.
      */
     private static int mask0(Class<? extends ChannelHandler> handlerType) {
         int mask = MASK_EXCEPTION_CAUGHT;
         try {
+            // inbound 类型
             if (ChannelInboundHandler.class.isAssignableFrom(handlerType)) {
                 mask |= MASK_ALL_INBOUND;
 
+                // 给有 Skip 注解的方法，分别给对应的标识改为 0
                 if (isSkippable(handlerType, "channelRegistered", ChannelHandlerContext.class)) {
                     mask &= ~MASK_CHANNEL_REGISTERED;
                 }
@@ -120,9 +137,11 @@ final class ChannelHandlerMask {
                 }
             }
 
+            // outbound
             if (ChannelOutboundHandler.class.isAssignableFrom(handlerType)) {
                 mask |= MASK_ALL_OUTBOUND;
 
+                // 同样给加了 Skip 注解的方法标识上 0
                 if (isSkippable(handlerType, "bind", ChannelHandlerContext.class,
                         SocketAddress.class, ChannelPromise.class)) {
                     mask &= ~MASK_BIND;
@@ -152,6 +171,7 @@ final class ChannelHandlerMask {
                 }
             }
 
+            // 如果 exceptionCaught 有 Skip 注解，也标识上 0
             if (isSkippable(handlerType, "exceptionCaught", ChannelHandlerContext.class, Throwable.class)) {
                 mask &= ~MASK_EXCEPTION_CAUGHT;
             }
@@ -160,9 +180,20 @@ final class ChannelHandlerMask {
             PlatformDependent.throwException(e);
         }
 
+        // 返回对应的标识
         return mask;
     }
 
+    /**
+     *
+     * 判断给定方法是否有 Skip 注解
+     *
+     * @param handlerType
+     * @param methodName
+     * @param paramTypes
+     * @return
+     * @throws Exception
+     */
     private static boolean isSkippable(
             final Class<?> handlerType, final String methodName, final Class<?>... paramTypes) throws Exception {
         return AccessController.doPrivileged(new PrivilegedExceptionAction<Boolean>() {
@@ -170,6 +201,7 @@ final class ChannelHandlerMask {
             public Boolean run() throws Exception {
                 Method m;
                 try {
+                    // 根据 methodName 方法名 和 paramTypes 方法参数，获取对应的方法
                     m = handlerType.getMethod(methodName, paramTypes);
                 } catch (NoSuchMethodException e) {
                     if (logger.isDebugEnabled()) {
@@ -178,6 +210,7 @@ final class ChannelHandlerMask {
                     }
                     return false;
                 }
+                // 判断改方法是否有注解 Skip
                 return m.isAnnotationPresent(Skip.class);
             }
         });

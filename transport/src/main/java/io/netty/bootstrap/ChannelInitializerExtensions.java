@@ -32,6 +32,8 @@ import java.util.ServiceLoader;
  */
 abstract class ChannelInitializerExtensions {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(ChannelInitializerExtensions.class);
+
+    // 默认在 getExtensions 方法中设置为 EmptyExtensions
     private static volatile ChannelInitializerExtensions implementation;
 
     private ChannelInitializerExtensions() {
@@ -50,6 +52,8 @@ abstract class ChannelInitializerExtensions {
                 if (impl != null) {
                     return impl;
                 }
+
+                // 获取属性 io.netty.bootstrap.extensions
                 String extensionProp = SystemPropertyUtil.get(ChannelInitializerExtension.EXTENSIONS_SYSTEM_PROPERTY);
                 logger.debug("-Dio.netty.bootstrap.extensions: {}", extensionProp);
                 if ("serviceload".equalsIgnoreCase(extensionProp)) {
@@ -57,6 +61,7 @@ abstract class ChannelInitializerExtensions {
                 } else if ("log".equalsIgnoreCase(extensionProp)) {
                     impl = new ServiceLoadingExtensions(false);
                 } else {
+                    // 默认没有配置，走这里，空扩展
                     impl = new EmptyExtensions();
                 }
                 implementation = impl;

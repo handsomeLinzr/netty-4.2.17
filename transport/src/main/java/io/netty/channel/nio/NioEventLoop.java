@@ -46,16 +46,31 @@ public final class NioEventLoop extends SingleThreadIoEventLoop {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(NioEventLoop.class);
 
+    /**
+     * 创建一个实例 NioEventLoop
+     * @param parent
+     * @param executor
+     * @param ioHandlerFactory
+     * @param taskQueueFactory
+     * @param tailTaskQueueFactory
+     * @param rejectedExecutionHandler
+     */
     NioEventLoop(NioEventLoopGroup parent, Executor executor, IoHandlerFactory ioHandlerFactory,
                  EventLoopTaskQueueFactory taskQueueFactory,
                  EventLoopTaskQueueFactory tailTaskQueueFactory, RejectedExecutionHandler rejectedExecutionHandler) {
+        // newTaskQueue(taskQueueFactory) = PlatformDependent.<Runnable>newMpscQueue()
+        // newTaskQueue(tailTaskQueueFactory) =  PlatformDependent.<Runnable>newMpscQueue()
         super(parent, executor, ioHandlerFactory, newTaskQueue(taskQueueFactory), newTaskQueue(tailTaskQueueFactory),
                 rejectedExecutionHandler);
     }
 
+    /**
+     * 创建新的任务队列
+     */
     private static Queue<Runnable> newTaskQueue(
             EventLoopTaskQueueFactory queueFactory) {
         if (queueFactory == null) {
+            // 默认  PlatformDependent.<Runnable>newMpscQueue()
             return newTaskQueue0(DEFAULT_MAX_PENDING_TASKS);
         }
         return queueFactory.newTaskQueue(DEFAULT_MAX_PENDING_TASKS);

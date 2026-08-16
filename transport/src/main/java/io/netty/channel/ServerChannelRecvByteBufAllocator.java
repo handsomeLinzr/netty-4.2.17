@@ -17,6 +17,9 @@ package io.netty.channel;
 
 /**
  * {@link MaxMessagesRecvByteBufAllocator} implementation which should be used for {@link ServerChannel}s.
+ *
+ * ServerChannel 使用的 MaxMessagesRecvByteBufAllocator 缓存分配器
+ *
  */
 public final class ServerChannelRecvByteBufAllocator extends DefaultMaxMessagesRecvByteBufAllocator {
     public ServerChannelRecvByteBufAllocator() {

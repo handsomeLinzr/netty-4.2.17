@@ -50,12 +50,14 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     // purposes.
     private final Map<ChannelOption<?>, Object> childOptions = new LinkedHashMap<ChannelOption<?>, Object>();
     private final Map<AttributeKey<?>, Object> childAttrs = new ConcurrentHashMap<AttributeKey<?>, Object>();
+
+    // 对应当前 serverBootstrap 的 config
     private final ServerBootstrapConfig config = new ServerBootstrapConfig(this);
 
-    // 客户端连接处理的线程组
+    // 客户端连接后的处理的线程组
     private volatile EventLoopGroup childGroup;
 
-    // 客户端连接的处理
+    // 客户端连接建立后的处理器
     private volatile ChannelHandler childHandler;
 
     public ServerBootstrap() { }
@@ -72,6 +74,8 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
     /**
      * Specify the {@link EventLoopGroup} which is used for the parent (acceptor) and the child (client).
+     *
+     * 设置
      */
     @Override
     public ServerBootstrap group(EventLoopGroup group) {
@@ -85,12 +89,18 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      * <p>
      * <strong>Important:</strong> Usually this is only useful for advanced use-cases and usually
      * {@link #group(EventLoopGroup)} is the preferred way to configure the group.
+     *
+     * 设置接受连接的线程组 和 任务处理的 线程组
+     *
      */
     public ServerBootstrap group(EventLoopGroup parentGroup, EventLoopGroup childGroup) {
+        // 设置 group
         super.group(parentGroup);
         if (this.childGroup != null) {
             throw new IllegalStateException("childGroup set already");
         }
+
+        // 设置 childGroup
         this.childGroup = ObjectUtil.checkNotNull(childGroup, "childGroup");
         return this;
     }
@@ -139,19 +149,43 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         return this;
     }
 
+    /**
+     * 初始化服务端通道
+     * @param channel
+     * @throws Throwable
+     */
     @Override
     void init(Channel channel) throws Throwable {
+
+        // 设置服务端 channel 的options属性配置
         setChannelOptions(channel, newOptionsArray(), logger);
+
+        // 设置服务端 channel 的attr 属性配置
         setAttributes(channel, newAttributesArray());
 
+        // 获取 channel 的 pipeline 通道
         ChannelPipeline p = channel.pipeline();
 
+        // 获取 worker 事件组
         final EventLoopGroup currentChildGroup = childGroup;
+
+        // 获取连接后的客户端处理器
         final ChannelHandler currentChildHandler = childHandler;
+
+        // 客户端连接的参数
         final Entry<ChannelOption<?>, Object>[] currentChildOptions = newOptionsArray(childOptions);
         final Entry<AttributeKey<?>, Object>[] currentChildAttrs = newAttributesArray(childAttrs);
+
+        // 获取初始化的扩展
         final Collection<ChannelInitializerExtension> extensions = getInitializerExtensions();
 
+        /**
+         * ChannelInitializer 一次性初始化 handler
+         * 负责添加一个 ServerBootstrapAcceptor 处理器，添加完后，自己就移除了
+         * ServerBootstrapAcceptor 主要负责接收到客户端连接后，对连接的初始化操作
+         * 初始化好了，就需要移除，因为后边的读写不需要用到了
+         *
+         */
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
             public void initChannel(final Channel ch) {
@@ -165,6 +199,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
                     @Override
                     public void run() {
                         pipeline.addLast(new ServerBootstrapAcceptor(
+                                    // worker           childHandler         childOptions          childAttrs
                                 ch, currentChildGroup, currentChildHandler, currentChildOptions, currentChildAttrs,
                                 extensions));
                     }

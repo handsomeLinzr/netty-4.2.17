@@ -51,9 +51,16 @@ public final class ThreadExecutorMap {
     public static Executor apply(final Executor executor, final EventExecutor eventExecutor) {
         ObjectUtil.checkNotNull(executor, "executor");
         ObjectUtil.checkNotNull(eventExecutor, "eventExecutor");
+        // 创建一个自定义 Executor
         return new Executor() {
             @Override
             public void execute(final Runnable command) {
+
+                // apply(command, eventExecutor) 主要是给 command 执行的前后
+                // 设置了当前归属的 nioEventLoop 对象，用的是 threadLocal 存储
+                // executor 是对应传进来的执行器，可以看 ThreadPerTaskExecutor
+                // ThreadPerTaskExecutor 会调用 newThread 处理
+                // eventExecutor = NioEventLoop
                 executor.execute(apply(command, eventExecutor));
             }
         };
@@ -69,10 +76,13 @@ public final class ThreadExecutorMap {
         return new Runnable() {
             @Override
             public void run() {
+                // 设置当前的执行器 eventExecutor 到 ThreadExecutorMap.mappings 中，也就是一个 fastThreadLocal
                 EventExecutor old = setCurrentExecutor(eventExecutor);
                 try {
+                    // 执行方法
                     command.run();
                 } finally {
+                    // 重新设置回去
                     setCurrentExecutor(old);
                 }
             }

@@ -1244,6 +1244,7 @@ public final class PlatformDependent {
     }
 
     private static final class Mpsc {
+        // true
         private static final boolean USE_MPSC_CHUNKED_ARRAY_QUEUE;
 
         static {
@@ -1279,12 +1280,13 @@ public final class PlatformDependent {
         }
 
         static <T> Queue<T> newChunkedMpscQueue(final int chunkSize, final int capacity) {
+            // 默认走 new MpscChunkedArrayQueue<T>(chunkSize, capacity)
             return USE_MPSC_CHUNKED_ARRAY_QUEUE ? new MpscChunkedArrayQueue<T>(chunkSize, capacity)
                     : new MpscChunkedAtomicArrayQueue<T>(chunkSize, capacity);
         }
 
         static <T> Queue<T> newMpscQueue() {
-            return USE_MPSC_CHUNKED_ARRAY_QUEUE ? new MpscUnboundedArrayQueue<T>(MPSC_CHUNK_SIZE)
+            return USE_MPSC_CHUNKED_ARRAY_QUEUE ? new MpscUnboundedArrayQueue<T>(MPSC_CHUNK_SIZE)  // 1024
                                                 : new MpscUnboundedAtomicArrayQueue<T>(MPSC_CHUNK_SIZE);
         }
     }

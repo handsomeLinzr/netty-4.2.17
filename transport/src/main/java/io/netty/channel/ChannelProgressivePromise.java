@@ -21,6 +21,9 @@ import io.netty.util.concurrent.ProgressivePromise;
 
 /**
  * Special {@link ChannelPromise} which will be notified once the associated bytes is transferring.
+ *
+ * 特殊的 ChannelPromise，当有字节在传输的时候进行唤醒
+ *
  */
 public interface ChannelProgressivePromise extends ProgressivePromise<Void>, ChannelProgressiveFuture, ChannelPromise {
 

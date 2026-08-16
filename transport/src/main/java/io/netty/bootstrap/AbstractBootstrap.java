@@ -61,9 +61,14 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     @SuppressWarnings("unchecked")
     private static final Map.Entry<AttributeKey<?>, Object>[] EMPTY_ATTRIBUTE_ARRAY = new Map.Entry[0];
 
+    // 服务端等待接收连接处理的线程池
     volatile EventLoopGroup group;
+
+    // 设置的 channel 通道工厂 ReflectiveChannelFactory
     @SuppressWarnings("deprecation")
     private volatile ChannelFactory<? extends C> channelFactory;
+
+
     private volatile SocketAddress localAddress;
 
     // 通过 .option 方法设置进来的参数
@@ -71,6 +76,8 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     // purposes.
     private final Map<ChannelOption<?>, Object> options = new LinkedHashMap<ChannelOption<?>, Object>();
     private final Map<AttributeKey<?>, Object> attrs = new ConcurrentHashMap<AttributeKey<?>, Object>();
+
+    // 对应设置的通道处理器
     private volatile ChannelHandler handler;
     private volatile ClassLoader extensionsClassLoader;
 
@@ -96,9 +103,13 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      */
     public B group(EventLoopGroup group) {
         ObjectUtil.checkNotNull(group, "group");
+
+        // 判断此时 group 必须为空，还未设置
         if (this.group != null) {
             throw new IllegalStateException("group set already");
         }
+
+        // 设置 group
         this.group = group;
         return self();
     }
@@ -112,6 +123,10 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      * The {@link Class} which is used to create {@link Channel} instances from.
      * You either use this or {@link #channelFactory(io.netty.channel.ChannelFactory)} if your
      * {@link Channel} implementation has no no-args constructor.
+     *
+     *
+     * 设置 channel 工厂，对应的工厂是 ReflectiveChannelFactory 工厂，对应包装的是 channel 的构造函数
+     *
      */
     public B channel(Class<? extends C> channelClass) {
         return channelFactory(new ReflectiveChannelFactory<C>(
@@ -121,6 +136,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
 
     /**
      * @deprecated Use {@link #channelFactory(io.netty.channel.ChannelFactory)} instead.
+     *
+     * 设置 channelFactory 通道类型工厂
+     *
      */
     @Deprecated
     public B channelFactory(ChannelFactory<? extends C> channelFactory) {
@@ -274,8 +292,12 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
 
     /**
      * Create a new {@link Channel} and bind it.
+     *
+     * 绑定ip和地址，返回处理的异步处理
+     *
      */
     public ChannelFuture bind(String inetHost, int inetPort) {
+        // SocketUtils.socketAddress = InetSocketAddress
         return bind(SocketUtils.socketAddress(inetHost, inetPort));
     }
 
@@ -288,27 +310,49 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
 
     /**
      * Create a new {@link Channel} and bind it.
+     *
+     * 绑定
+     *
      */
     public ChannelFuture bind(SocketAddress localAddress) {
         validate();
         return doBind(ObjectUtil.checkNotNull(localAddress, "localAddress"));
     }
 
+    /**
+     * 绑定ip和端口的逻辑
+     * 重点
+     * @param localAddress
+     * @return
+     */
     private ChannelFuture doBind(final SocketAddress localAddress) {
+
+        // 绑定和注册，重点
         final ChannelFuture regFuture = initAndRegister();
+
+        // 后去对应绑定的地址的通道
         final Channel channel = regFuture.channel();
+
+        // 有异常，直接返回
         if (regFuture.cause() != null) {
             return regFuture;
         }
 
+        // 执行完了
         if (regFuture.isDone()) {
+
+            // 创建 channel 对应的 DefaultChannelPromise
             // At this point we know that the registration was complete and successful.
             ChannelPromise promise = channel.newPromise();
             doBind0(regFuture, channel, localAddress, promise);
             return promise;
         } else {
+
+            // 没执行完，走这里
+            // 注册一般都是已经走完了，这里是为了以防万一，做异步处理
             // Registration future is almost always fulfilled already, but just in case it's not.
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
+            // 添加一个监听器
             regFuture.addListener(future -> {
                 Throwable cause = future.cause();
                 if (cause != null) {
@@ -320,17 +364,27 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
                     // See https://github.com/netty/netty/issues/2586
                     promise.registered();
 
+                    // 绑定
                     doBind0(regFuture, channel, localAddress, promise);
                 }
             });
+            // 直接返回异步处理
             return promise;
         }
     }
 
+    /**
+     * 绑定地址并进行注册
+     * @return
+     */
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
+            // 创建对应类型 Channel
+            // 这里获取 NioServerSocketChannel，其中包含了原生的 ServerSocketChannel，在构造函数中处理
+            // 同时原生的 ServerSocketChannel 注册了 accept 事件
             channel = channelFactory.newChannel();
+            // 初始化，然后给当前 pipeline 添加一个初始化监听器
             init(channel);
         } catch (Throwable t) {
             if (channel != null) {
@@ -343,7 +397,12 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             return new DefaultChannelPromise(new FailedChannel(), GlobalEventExecutor.INSTANCE).setFailure(t);
         }
 
+        // register： 从 Bootstrap 中选择一个 eventLoop
+        // 用了 EventLoopGroup 去 register
+        // 其实最后就是从选择器中，next() 得到下一个的 NioEventLoop，然后调用到 SingleThreadEventExecutor.register
         final ChannelFuture regFuture = config().group().register(channel);
+
+        // 异常处理
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
                 channel.close();
@@ -367,10 +426,13 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     abstract void init(Channel channel) throws Throwable;
 
     Collection<ChannelInitializerExtension> getInitializerExtensions() {
+        // 获取类加载器
         ClassLoader loader = extensionsClassLoader;
         if (loader == null) {
+            // 默认为空，则获取当前类的类加载器
             loader = getClass().getClassLoader();
         }
+        // EmptyExtensions，得到 Collections.emptyList()
         return ChannelInitializerExtensions.getExtensions().extensions(loader);
     }
 
@@ -394,6 +456,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
 
     /**
      * the {@link ChannelHandler} to use for serving the requests.
+     *
+     * 设置请求的处理逻辑
+     *
      */
     public B handler(ChannelHandler handler) {
         this.handler = ObjectUtil.checkNotNull(handler, "handler");
@@ -416,6 +481,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      */
     public abstract AbstractBootstrapConfig<B, C> config();
 
+    // 创建一个 options 配置的复制
     final Map.Entry<ChannelOption<?>, Object>[] newOptionsArray() {
         return newOptionsArray(options);
     }
@@ -472,6 +538,11 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         return Collections.unmodifiableMap(new HashMap<K, V>(map));
     }
 
+    /**
+     * 给 channel 设置 attrs 属性
+     * @param channel
+     * @param attrs
+     */
     static void setAttributes(Channel channel, Map.Entry<AttributeKey<?>, Object>[] attrs) {
         for (Map.Entry<AttributeKey<?>, Object> e: attrs) {
             @SuppressWarnings("unchecked")
@@ -491,6 +562,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     private static void setChannelOption(
             Channel channel, ChannelOption<?> option, Object value, InternalLogger logger) throws Throwable {
         try {
+            // 给 channel 设置属性
             if (!channel.config().setOption((ChannelOption<Object>) option, value)) {
                 logger.warn("Unknown channel option '{}' for channel '{}' of type '{}'",
                         option, channel, channel.getClass());

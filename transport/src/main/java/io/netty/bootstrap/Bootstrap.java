@@ -164,12 +164,19 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
 
+        // regFuture 判断是否已经完成
+        // 因为上边的 initAndRegister 是异步的，交给 eventLoop 处理
+        // 所以需要判断是否完成
         if (regFuture.isDone()) {
+            // 完成了，但是失败了，则返回 regFuture
             if (!regFuture.isSuccess()) {
                 return regFuture;
             }
+            // 如果成功了，调用 doResolveAndConnect0 继续往下走
             return doResolveAndConnect0(channel, remoteAddress, localAddress, channel.newPromise());
         } else {
+
+            // 还未完成，添加监听器，然后返回
             // Registration future is almost always fulfilled already, but just in case it's not.
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
             regFuture.addListener(future -> {

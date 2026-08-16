@@ -33,10 +33,13 @@ public final class AdaptiveCalculator {
 
     static {
         List<Integer> sizeTable = new ArrayList<Integer>();
+        // 16，16*2，16*3，16*4 ... 511
+        // 也就是从 16 到 511，递增 16
         for (int i = 16; i < 512; i += 16) {
             sizeTable.add(i);
         }
 
+        // 从 512 到 65535，512，1024，2048，以2倍的情况累加
         // Suppress a warning since i becomes negative when an integer overflow happens
         for (int i = 512; i > 0; i <<= 1) {
             sizeTable.add(i);
@@ -114,9 +117,18 @@ public final class AdaptiveCalculator {
         nextSize = max(SIZE_TABLE[index], minCapacity);
     }
 
+    /**
+     * 接收数据的 buffer 的容量会尽可能的足够大以接收数据
+     * 也尽可能的小以避免内存碎片
+     * @param size
+     */
     public void record(int size) {
+
+        // 尝试是否可以减小分配的空间仍然能满足需求，
+        // 尝试方法：当前读取的 size 是否小于或等于 打算缩小的的大小
         if (size <= SIZE_TABLE[max(0, index - INDEX_DECREMENT)]) {
             if (decreaseNow) {
+                // decreaseNow 连续减小2次都可以
                 index = max(index - INDEX_DECREMENT, minIndex);
                 nextSize = max(SIZE_TABLE[index], minCapacity);
                 decreaseNow = false;
@@ -124,6 +136,8 @@ public final class AdaptiveCalculator {
                 decreaseNow = true;
             }
         } else if (size >= nextSize) {
+            // 判断是否实际读取的数据大小等于预估的，是则尝试扩容
+
             index = min(index + INDEX_INCREMENT, maxIndex);
             nextSize = min(SIZE_TABLE[index], maxCapacity);
             decreaseNow = false;

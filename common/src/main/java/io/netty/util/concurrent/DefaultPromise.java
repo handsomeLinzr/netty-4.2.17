@@ -60,7 +60,12 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
             StacklessCancellationException.newInstance(DefaultPromise.class, "cancel(...)"));
     private static final StackTraceElement[] CANCELLATION_STACK = CANCELLATION_CAUSE_HOLDER.cause.getStackTrace();
 
+
+    // 异步结果
     private volatile Object result;
+
+    // 执行器，默认是 GlobalEventExecutor
+    // 如果是调用到 child 后去 register 注册通道，则对应的是每个 child，也就是 SingleThreadEventExecutor
     private final EventExecutor executor;
 
     /**
@@ -68,8 +73,14 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
      * If {@code null}, it means either 1) no listeners were added yet or 2) all listeners were notified.
      * <p>
      * Threading - synchronized(this). We must support adding listeners when there is no EventExecutor.
+     *
+     * 通过 addListener0 设置进来
+     *
      */
     private GenericFutureListener<? extends Future<?>> listener;
+
+    // 在 listener 不为空的情况下，在调用 addListener0 的方法时，
+    // 这个 listeners 会被设置成 DefaultFutureListeners，且将 listener 和 另一个 listener 封装进去
     private DefaultFutureListeners listeners;
     /**
      * Threading - synchronized(this). We are required to hold the monitor to use Java's underlying wait()/notifyAll().
@@ -106,6 +117,11 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         executor = null;
     }
 
+    /**
+     * 设置结果，唤醒监听器
+     * @param result
+     * @return
+     */
     @Override
     public Promise<V> setSuccess(V result) {
         if (setSuccess0(result)) {
@@ -191,10 +207,12 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     public Promise<V> addListener(GenericFutureListener<? extends Future<? super V>> listener) {
         checkNotNull(listener, "listener");
 
+        // 同步锁添加监听器
         synchronized (this) {
             addListener0(listener);
         }
 
+        // 如果此时已经完成，调用监听器
         if (isDone()) {
             notifyListeners();
         }
@@ -466,6 +484,9 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
      * The executor may be used to avoid {@link StackOverflowError} by executing a {@link Runnable} if the stack
      * depth exceeds a threshold.
      * @return The executor used to notify listeners when this promise is complete.
+     *
+     * 获取去调用 listeners 的线程循环组
+     *
      */
     protected EventExecutor executor() {
         return executor;
@@ -496,21 +517,27 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     }
 
     private void notifyListeners() {
+        // 获取线程组
         EventExecutor executor = executor();
+
+        // 如果当前线程已经在其中
         if (executor.inEventLoop()) {
             final InternalThreadLocalMap threadLocals = InternalThreadLocalMap.get();
             final int stackDepth = threadLocals.futureListenerStackDepth();
             if (stackDepth < MAX_LISTENER_STACK_DEPTH) {
                 threadLocals.setFutureListenerStackDepth(stackDepth + 1);
                 try {
+                    // 唤醒监听器
                     notifyListenersNow();
                 } finally {
                     threadLocals.setFutureListenerStackDepth(stackDepth);
                 }
+                // 返回
                 return;
             }
         }
 
+        // 如果不在线程组中，则让 executor 去执行
         safeExecute(executor, new Runnable() {
             @Override
             public void run() {
@@ -549,9 +576,14 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         });
     }
 
+    /**
+     * 唤醒监听器，调用 operationComplete 方法
+     */
     private void notifyListenersNow() {
         GenericFutureListener listener;
         DefaultFutureListeners listeners;
+
+        // 判断校验
         synchronized (this) {
             listener = this.listener;
             listeners = this.listeners;
@@ -566,7 +598,9 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
                 this.listeners = null;
             }
         }
+
         for (;;) {
+            // 遍历监听器调用
             if (listener != null) {
                 notifyListener0(this, listener);
             } else {
@@ -579,6 +613,8 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
                     notifyingListeners = false;
                     return;
                 }
+
+                // 重置
                 listener = this.listener;
                 listeners = this.listeners;
                 if (listener != null) {
@@ -590,6 +626,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         }
     }
 
+    // 循环调用
     private void notifyListeners0(DefaultFutureListeners listeners) {
         GenericFutureListener<?>[] a = listeners.listeners();
         int size = listeners.size();
@@ -601,6 +638,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     @SuppressWarnings({ "unchecked", "rawtypes" })
     private static void notifyListener0(Future future, GenericFutureListener l) {
         try {
+            // 调用监听器的 operationComplete 方法
             l.operationComplete(future);
         } catch (Throwable t) {
             if (logger.isWarnEnabled()) {
@@ -612,6 +650,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     private void addListener0(GenericFutureListener<? extends Future<? super V>> listener) {
         if (this.listener == null) {
             if (listeners == null) {
+                // 赋值给到当前 listener
                 this.listener = listener;
             } else {
                 listeners.add(listener);
@@ -646,7 +685,10 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     private boolean setValue0(Object objResult) {
         if (RESULT_UPDATER.compareAndSet(this, null, objResult) ||
             RESULT_UPDATER.compareAndSet(this, UNCANCELLABLE, objResult)) {
+
+            // 判断是否还监听器
             if (checkNotifyWaiters()) {
+                // 唤醒监听器
                 notifyListeners();
             }
             return true;

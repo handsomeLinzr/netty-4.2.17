@@ -59,6 +59,7 @@ public class NioEventLoopGroup extends MultiThreadIoEventLoopGroup implements Io
      * {@link SelectorProvider} which is returned by {@link SelectorProvider#provider()}.
      *
      * 根据给定的线程数，创建一个新的实例，对应的 SelectorProvider 是调用了 SelectorProvider.provider()
+     * 最后得到了 MultithreadEventExecutorGroup 对象
      *
      */
     public NioEventLoopGroup(int nThreads) {
@@ -191,12 +192,15 @@ public class NioEventLoopGroup extends MultiThreadIoEventLoopGroup implements Io
         }
     }
 
+
     @Override
     protected IoEventLoop newChild(Executor executor, IoHandlerFactory ioHandlerFactory, Object... args) {
+        // 拒绝策略
         RejectedExecutionHandler rejectedExecutionHandler = (RejectedExecutionHandler) args[0];
         EventLoopTaskQueueFactory taskQueueFactory = null;
         EventLoopTaskQueueFactory tailTaskQueueFactory = null;
 
+        // 默认最后只有一个参数：拒绝策略
         int argsLength = args.length;
         if (argsLength > 1) {
             taskQueueFactory = (EventLoopTaskQueueFactory) args[1];
@@ -204,6 +208,10 @@ public class NioEventLoopGroup extends MultiThreadIoEventLoopGroup implements Io
         if (argsLength > 2) {
             tailTaskQueueFactory = (EventLoopTaskQueueFactory) args[2];
         }
+
+        /**
+         *  taskQueueFactory 和 tailTaskQueueFactory 都是 null
+         */
         return new NioEventLoop(
                 this, executor, ioHandlerFactory, taskQueueFactory, tailTaskQueueFactory, rejectedExecutionHandler);
     }

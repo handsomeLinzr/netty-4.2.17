@@ -21,12 +21,18 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadFactory;
 
 public final class ThreadPerTaskExecutor implements Executor {
+    // DefaultThreadFactory
     private final ThreadFactory threadFactory;
 
     public ThreadPerTaskExecutor(ThreadFactory threadFactory) {
         this.threadFactory = ObjectUtil.checkNotNull(threadFactory, "threadFactory");
     }
 
+    /**
+     * 执行任务的处理
+     * 生成的线程：nioEventLoopGroup-n-x
+     * @param command the runnable task
+     */
     @Override
     public void execute(Runnable command) {
         threadFactory.newThread(command).start();

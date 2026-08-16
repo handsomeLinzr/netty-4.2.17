@@ -36,7 +36,7 @@ import static io.netty.util.internal.ObjectUtil.checkPositive;
  */
 public abstract class MultithreadEventExecutorGroup extends AbstractEventExecutorGroup {
 
-    // 执行器组
+    // 执行器组，每个都是一个 SingleThreadEventExecutor
     private final EventExecutor[] children;
 
     // 执行器组集合
@@ -49,6 +49,7 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
     private final Promise<?> terminationFuture = new DefaultPromise(GlobalEventExecutor.INSTANCE);
 
     // 执行器选择器
+    // 如果是2的幂次方，则是 PowerOfTwoEventExecutorChooser，否则 GenericEventExecutorChooser
     private final EventExecutorChooserFactory.EventExecutorChooser chooser;
 
     /**
@@ -86,11 +87,15 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
      */
     protected MultithreadEventExecutorGroup(int nThreads, Executor executor,
                                             EventExecutorChooserFactory chooserFactory, Object... args) {
+        // 线程数检查
         checkPositive(nThreads, "nThreads");
 
         // 默认如果没有线程池，则创建 ThreadPerTaskExecutor 线程池
         if (executor == null) {
             // 线程池，用作创建的模板
+            // newDefaultThreadFactory 获得线程工厂
+            // 返回对应的 ThreadPerTaskExecutor 线程执行器，对应的 newThread 方法是调用线程工厂执行 newThread 启动
+            // newDefaultThreadFactory() 得到 DefaultThreadFactory
             executor = new ThreadPerTaskExecutor(newDefaultThreadFactory());
         }
 
@@ -100,7 +105,8 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
         for (int i = 0; i < nThreads; i ++) {
             boolean success = false;
             try {
-                // 给 children 创建线程
+                // 给 children 创建线程, args两个参数，分别 nioHandler 和 拒绝策略
+                // 最后得到 SingleThreadEventExecutor
                 children[i] = newChild(executor, args);
                 success = true;
             } catch (Exception e) {
@@ -142,7 +148,8 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
         };
 
         for (EventExecutor e: children) {
-            // 给 children 添加关闭事件
+            // 给每个 children 添加关闭事件
+            // 关闭的时候处理上边的逻辑
             e.terminationFuture().addListener(terminationListener);
         }
 
@@ -155,6 +162,7 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
         return new DefaultThreadFactory(getClass());
     }
 
+    // 根据选择器获取下一个
     @Override
     public EventExecutor next() {
         return chooser.next();

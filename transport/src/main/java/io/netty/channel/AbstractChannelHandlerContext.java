@@ -84,9 +84,16 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
      */
     private static final int INIT = 0;
 
+    // 当前绑定的 pipeline
     private final DefaultChannelPipeline pipeline;
+
+    // handler 的名称
     private final String name;
+
+    // true
     private final boolean ordered;
+
+    // 对应的 handler 的标识
     private final int executionMask;
 
     // Will be set to null if no child executor should be used, otherwise it will be set to the
@@ -110,6 +117,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         this.name = ObjectUtil.checkNotNull(name, "name");
         this.pipeline = pipeline;
         childExecutor = executor;
+        // 计算标识
         executionMask = mask(handlerClass);
         // Its ordered if its driven by the EventLoop or the given Executor is an instanceof OrderedEventExecutor.
         ordered = executor == null || executor instanceof OrderedEventExecutor;
@@ -144,8 +152,14 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return name;
     }
 
+
+    /**
+     * 注册事件
+     * @return
+     */
     @Override
     public ChannelHandlerContext fireChannelRegistered() {
+        // 获取 inbound 中有 channelRegistered 方法用到的 context
         AbstractChannelHandlerContext next = findContextInbound(MASK_CHANNEL_REGISTERED);
         if (next.executor().inEventLoop()) {
             if (next.invokeHandler()) {
@@ -158,8 +172,10 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                     if (handler == headContext) {
                         headContext.channelRegistered(next);
                     } else if (handler instanceof ChannelInboundHandlerAdapter) {
+                        // ChannelInboundHandlerAdapter 处理
                         ((ChannelInboundHandlerAdapter) handler).channelRegistered(next);
                     } else {
+                        // ChannelInboundHandler 处理
                         ((ChannelInboundHandler) handler).channelRegistered(next);
                     }
                 } catch (Throwable t) {
@@ -924,6 +940,11 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return false;
     }
 
+    /**
+     * Inbound 入站数据，查找  next
+     * @param mask
+     * @return
+     */
     private AbstractChannelHandlerContext findContextInbound(int mask) {
         AbstractChannelHandlerContext ctx = this;
         EventExecutor currentExecutor = executor();
@@ -933,6 +954,11 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return ctx;
     }
 
+    /**
+     * Outbound 出站数据，查找 prev
+     * @param mask
+     * @return
+     */
     private AbstractChannelHandlerContext findContextOutbound(int mask) {
         AbstractChannelHandlerContext ctx = this;
         EventExecutor currentExecutor = executor();
@@ -962,16 +988,24 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         handlerState = REMOVE_COMPLETE;
     }
 
+    /**
+     * 设置当前 context 的 handlerState 属性
+     * 3 则直接返回 false
+     * 其他的则尝试原子设置为 2，成功了返回 true
+     * @return
+     */
     final boolean setAddComplete() {
         for (;;) {
             int oldState = handlerState;
             if (oldState == REMOVE_COMPLETE) {
+                // 如果当前的 handlerState 是 3，直接返回 false
                 return false;
             }
             // Ensure we never update when the handlerState is REMOVE_COMPLETE already.
             // oldState is usually ADD_PENDING but can also be REMOVE_COMPLETE when an EventExecutor is used that is not
             // exposing ordering guarantees.
             if (HANDLER_STATE_UPDATER.compareAndSet(this, oldState, ADD_COMPLETE)) {
+                // 原子将当前的 context 的属性 handlerState 设置为 2，成功则返回 true
                 return true;
             }
         }
@@ -982,10 +1016,16 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         assert updated; // This should always be true as it MUST be called before setAddComplete() or setRemoved().
     }
 
+    /**
+     * 调用 ChannelHandler 的 handlerAdded 方法
+     * @throws Exception
+     */
     final void callHandlerAdded() throws Exception {
         // We must call setAddComplete before calling handlerAdded. Otherwise if the handlerAdded method generates
         // any pipeline events ctx.handler() will miss them because the state will not allow it.
         if (setAddComplete()) {
+            // 设置标记成功后
+            // 调用对应的 ChannelHandler，调用方法 handlerAdded
             handler().handlerAdded(this);
         }
     }

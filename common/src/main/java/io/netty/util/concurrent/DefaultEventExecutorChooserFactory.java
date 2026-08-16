@@ -55,12 +55,19 @@ public final class DefaultEventExecutorChooserFactory implements EventExecutorCh
     private static final class PowerOfTwoEventExecutorChooser implements EventExecutorChooser {
         // 当前选择到的位置
         private final AtomicInteger idx = new AtomicInteger();
+        // 对应的执行器数组
+        // 实际上是 SingleThreadEventExecutor
         private final EventExecutor[] executors;
 
         PowerOfTwoEventExecutorChooser(EventExecutor[] executors) {
             this.executors = executors;
         }
 
+        /**
+         * idx 是一个自增 id
+         * 然后获取到下一个对应的 executors 返回
+         * @return
+         */
         @Override
         public EventExecutor next() {
             return executors[idx.getAndIncrement() & executors.length - 1];
@@ -81,6 +88,10 @@ public final class DefaultEventExecutorChooserFactory implements EventExecutorCh
             this.executors = executors;
         }
 
+        /**
+         * 自增然后取绝对值，再进行与操作得到下一个
+         * @return
+         */
         @Override
         public EventExecutor next() {
             return executors[(int) Math.abs(idx.getAndIncrement() % executors.length)];

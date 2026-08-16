@@ -55,10 +55,17 @@ public class DefaultChannelConfig implements ChannelConfig {
             AtomicReferenceFieldUpdater.newUpdater(
                     DefaultChannelConfig.class, WriteBufferWaterMark.class, "writeBufferWaterMark");
 
+    // 对应的 NioServerSocketChannel
     protected final Channel channel;
 
     private volatile ByteBufAllocator allocator = ByteBufAllocator.DEFAULT;
+
+    // new ServerChannelRecvByteBufAllocator()
     private volatile RecvByteBufAllocator rcvBufAllocator;
+
+    /**
+     * io.netty.channel.DefaultMessageSizeEstimator#DEFAULT
+     */
     private volatile MessageSizeEstimator msgSizeEstimator = DEFAULT_MSG_SIZE_ESTIMATOR;
 
     private volatile int connectTimeoutMillis = DEFAULT_CONNECT_TIMEOUT;
