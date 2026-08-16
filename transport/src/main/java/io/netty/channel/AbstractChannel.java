@@ -54,7 +54,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     // DefaultChannelPipeline
     // 在构造函数 AbstractChannel 中设置
     private final DefaultChannelPipeline pipeline;
+
+    // 通道有效的异步器
     private final VoidChannelPromise unsafeVoidPromise = new VoidChannelPromise(this, false);
+
     private final CloseFuture closeFuture = new CloseFuture(this);
 
     private volatile SocketAddress localAddress;
@@ -427,17 +430,19 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                     registered = true;
 
                     // 成功注册了，调用这里
-                    // 确保在回调 promise 前，先调用 handlerAdded
+                    // 确保在回调 promise 前，先调用之前未注册的时候，添加的 handlerAdded
                     // 最后会回调到 ServerBootstrap 添加的那个初始化 ChannelInitializer
                     // Ensure we call handlerAdded(...) before we actually notify the promise. This is needed as the
                     // user may already fire events through the pipeline in the ChannelFutureListener.
                     pipeline.invokeHandlerAddedIfNeeded();
 
                     // 设置返回结果，将 promise 设置进去
+                    // 触发 promise 的监听器
                     safeSetSuccess(promise);
 
-                    // 传播注册事件
+                    // 传播注册事件，会调用到 channelRegistered 方法，注册完成
                     pipeline.fireChannelRegistered();
+
                     // Only fire a channelActive if the channel has never been registered. This prevents firing
                     // multiple channel actives if the channel is deregistered and re-registered.
                     if (isActive()) {

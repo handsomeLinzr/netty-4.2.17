@@ -39,32 +39,44 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
     private static final long DEFAULT_MAX_TASK_PROCESSING_QUANTUM_NS = TimeUnit.MILLISECONDS.toNanos(Math.max(100,
             SystemPropertyUtil.getInt("io.netty.eventLoop.maxTaskProcessingQuantumMs", 1000)));
 
-    // 默认 1000 ms
+    // 默认 1000 ms，控制执行 task 使用的时间
+    // 防止当前线程一直在处理 task 任务而没法及时响应其他处理
     private final long maxTaskProcessingQuantumNs;
+
+    // ioHandler 的上下文对象 处理
     private final IoHandlerContext context = new IoHandlerContext() {
+
+        // 是否可以阻塞
         @Override
         public boolean canBlock() {
             assert inEventLoop();
+
+            // 1.判断当前没有任务
+            // 2.任务队列 scheduledTaskQueue 中也没有任务
             return !hasTasks() && !hasScheduledTasks();
         }
 
+        // 查询距离 currentTimeNanos 最近的 定时任务 scheduledTaskQueue 的时间
         @Override
         public long delayNanos(long currentTimeNanos) {
             assert inEventLoop();
             return SingleThreadIoEventLoop.this.delayNanos(currentTimeNanos);
         }
 
+        // 查询 scheduledTaskQueue 中下一个任务的执行绝对时间（时间点）
         @Override
         public long deadlineNanos() {
             assert inEventLoop();
             return SingleThreadIoEventLoop.this.deadlineNanos();
         }
 
+        // io 时间收集
         @Override
         public void reportActiveIoTime(long activeNanos) {
             SingleThreadIoEventLoop.this.reportActiveIoTime(activeNanos);
         }
 
+        // 是否应该收集 io 时间
         @Override
         public boolean shouldReportActiveIoTime() {
             return isSuspensionSupported();
@@ -202,21 +214,36 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
         this.ioHandler = ioHandlerFactory.newHandler(this);
     }
 
+    /**
+     * 核心的 run 方法
+     * 1.处理 select 事件
+     * 2.处理 taskQueue、scheduleTask、tailTasks 事件
+     *
+     * 执行一遍 io 事件，就继续去执行任务，一直循环
+     *
+     */
     @Override
     protected void run() {
         assert inEventLoop();
+        // ioHandler 初始化，默认是空实现
         ioHandler.initialize();
         do {
             // io 执行
+            // 实际调用 ioHandler.run(IoHandlerContext);
+            // 对 socket 的事件进行处理
             runIo();
+
             if (isShuttingDown()) {
+                // 要停止前，调用 prepareToDestroy
                 ioHandler.prepareToDestroy();
             }
 
-            // 执行所有任务
+            // 执行所有任务，执行 taskQueue 中的任务
+            // 该方法最多只能执行 maxTaskProcessingQuantumNs 时间，默认 1000 ms
             // Now run all tasks for the maximum configured amount of time before trying to run IO again.
             runAllTasks(maxTaskProcessingQuantumNs);
 
+            // 一直循环，直到关闭 或者 暂停
             // We should continue with our loop until we either confirmed a shutdown or we can suspend it.
         } while (!confirmShutdown() && !canSuspend());
     }
@@ -236,9 +263,14 @@ public class SingleThreadIoEventLoop extends SingleThreadEventLoop implements Io
      * This method returns the number of {@link IoHandle}s for which IO was processed.
      *
      * This method must be called from the {@link EventLoop} thread.
+     *
+     *
+     * 调用到 ioHandler 的 run 方法中
+     *
      */
     protected int runIo() {
         assert inEventLoop();
+        // 运行
         return ioHandler.run(context);
     }
 

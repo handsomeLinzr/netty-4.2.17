@@ -257,6 +257,8 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     protected abstract class AbstractNioUnsafe extends AbstractUnsafe implements NioUnsafe, NioIoHandle {
         @Override
         public void close() {
+
+            // 回调关闭的异步器
             close(voidPromise());
         }
 
@@ -381,6 +383,9 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             closeIfClosed();
         }
 
+        /**
+         * 连接事件
+         */
         @Override
         public final void finishConnect() {
             // Note this method is invoked by the event loop only if the connection attempt was
@@ -390,6 +395,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
             try {
                 boolean wasActive = isActive();
+                // 处理连接完成事件
                 doFinishConnect();
                 fulfillConnectPromise(connectPromise, wasActive);
             } catch (Throwable t) {
@@ -426,23 +432,40 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                     (SelectionKey) registration.attachment()).interestOps());
         }
 
+        /**
+         *
+         * 事件的处理逻辑
+         *
+         * @param registration  the {@link IoRegistration} for this {@link IoHandle}.
+         * @param event       the {@link IoEvent} that must be handled. The {@link IoEvent} is only valid
+         *                      while this method is executed and so must not escape it.
+         */
         @Override
         public void handle(IoRegistration registration, IoEvent event) {
             try {
+                // 获取事件
                 NioIoEvent nioEvent = (NioIoEvent) event;
+
+                // 事件的 ops
                 NioIoOps nioReadyOps = nioEvent.ops();
                 // We first need to call finishConnect() before try to trigger a read(...) or write(...) as otherwise
                 // the NIO JDK channel implementation may throw a NotYetConnectedException.
                 if (nioReadyOps.contains(NioIoOps.CONNECT)) {
+                    // 连接事件
+
+                    // 先删除 OP_CONNECT 事件
                     // remove OP_CONNECT as otherwise Selector.select(..) will always return without blocking
                     // See https://github.com/netty/netty/issues/924
                     removeAndSubmit(NioIoOps.CONNECT);
 
+                    // 调用 unsafe 处理 connect 事件
                     unsafe().finishConnect();
                 }
 
                 // Process OP_WRITE first as we may be able to write some queued buffers and so free memory.
                 if (nioReadyOps.contains(NioIoOps.WRITE)) {
+                    // 写事件
+
                     // Call forceFlush which will also take care of clear the OP_WRITE once there is nothing left to
                     // write
                     forceFlush();
@@ -451,6 +474,8 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                 // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
                 // to a spin loop
                 if (nioReadyOps.contains(NioIoOps.READ_AND_ACCEPT) || nioReadyOps.equals(NioIoOps.NONE)) {
+                    // read 或 接收事件
+
                     read();
                 }
             } catch (CancelledKeyException ignored) {

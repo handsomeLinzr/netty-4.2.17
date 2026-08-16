@@ -89,6 +89,10 @@ class PromiseTask<V> extends DefaultPromise<V> implements RunnableFuture<V> {
         return this == obj;
     }
 
+    /**
+     * 执行任务
+     * 也就是：Callable 则调用 call 方法并返回；Runnable 则调用 run 方法，返回 null
+     */
     @SuppressWarnings("unchecked")
     V runTask() throws Throwable {
         final Object task = this.task;

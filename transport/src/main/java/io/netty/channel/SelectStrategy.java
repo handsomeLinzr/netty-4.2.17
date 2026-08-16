@@ -26,14 +26,23 @@ import io.netty.util.IntSupplier;
 public interface SelectStrategy {
 
     /**
+     *
+     * 表示一个阻塞的 select
+     *
      * Indicates a blocking select should follow.
      */
     int SELECT = -1;
     /**
+     *
+     * 重试，需要进行非阻塞 select
+     *
      * Indicates the IO loop should be retried, no blocking select to follow directly.
      */
     int CONTINUE = -2;
     /**
+     *
+     * 非阻塞轮询新的事件
+     *
      * Indicates the IO loop to poll for new events without blocking.
      */
     int BUSY_WAIT = -3;

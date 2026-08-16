@@ -25,8 +25,11 @@ final class DefaultSelectStrategy implements SelectStrategy {
 
     private DefaultSelectStrategy() { }
 
+    // 计算策略
     @Override
     public int calculateStrategy(IntSupplier selectSupplier, boolean hasTasks) throws Exception {
+        // 如果有任务，直接调用 selectSupplier.get() 马上进行 select 一次并返回
+        // 否则返回 1
         return hasTasks ? selectSupplier.get() : SelectStrategy.SELECT;
     }
 }

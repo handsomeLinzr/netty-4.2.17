@@ -370,11 +370,15 @@ public final class NioIoHandler implements IoHandler {
     }
 
     final class DefaultNioRegistration implements IoRegistration {
+
+        // 注册是否仍然有效
         private final AtomicBoolean canceled = new AtomicBoolean();
 
         // unsafe
         private final NioIoHandle handle;
-        private volatile SelectionKey key;  // javaSocketChannel.register 的返回
+
+        // javaSocketChannel.register 的返回
+        private volatile SelectionKey key;
 
         DefaultNioRegistration(ThreadAwareExecutor executor, NioIoHandle handle, NioIoOps initialOps, Selector selector)
                 throws IOException {
@@ -402,6 +406,7 @@ public final class NioIoHandler implements IoHandler {
 
         @Override
         public boolean isValid() {
+            // 注册仍然有效，且 key 是有效的
             return !canceled.get() && key.isValid();
         }
 
@@ -439,10 +444,18 @@ public final class NioIoHandler implements IoHandler {
             }
         }
 
+        /**
+         * 处理就绪事件
+         * @param ready
+         */
         void handle(int ready) {
+            // 如果已经失效，直接返回
             if (!isValid()) {
                 return;
             }
+
+            // 调用 handle 处理 就绪事件
+            // 这里的 handle 是 unsafe，也就是 NioMessageUnsafe
             handle.handle(this, NioIoOps.eventOf(ready));
         }
     }
@@ -483,13 +496,23 @@ public final class NioIoHandler implements IoHandler {
         }
     }
 
+    /**
+     *
+     * nio 线程处理逻辑
+     * 也就是核心的部分，线程组中的线程的处理核心
+     *
+     * @param context  the {@link IoHandlerContext}.
+     * @return
+     */
     @Override
     public int run(IoHandlerContext context) {
         int handled = 0;
         try {
             try {
+                // !context.canBlock() 得到是否允许阻塞
                 switch (selectStrategy.calculateStrategy(selectNowSupplier, !context.canBlock())) {
                     case SelectStrategy.CONTINUE:
+                        // 判断是否需要报告
                         if (context.shouldReportActiveIoTime()) {
                             context.reportActiveIoTime(0); // Report zero as we did no I/O.
                         }
@@ -497,8 +520,10 @@ public final class NioIoHandler implements IoHandler {
 
                     case SelectStrategy.BUSY_WAIT:
                         // fall-through to SELECT since the busy-wait is not supported with NIO
+                        // 由于 NIO 不支持忙等待，因此会跳转到 SELECT
 
                     case SelectStrategy.SELECT:
+                        // 调用 select
                         select(context, wakenUp.getAndSet(false));
 
                         // 'wakenUp.compareAndSet(false, true)' is always evaluated
@@ -548,11 +573,16 @@ public final class NioIoHandler implements IoHandler {
 
             if (context.shouldReportActiveIoTime()) {
                 // We start the timer after the blocking select() call has returned.
+                // 记录开始时间
                 long activeIoStartTimeNanos = System.nanoTime();
+                // 处理 key 事件
                 handled = processSelectedKeys();
+                // 记录结束时间
                 long activeIoEndTimeNanos = System.nanoTime();
+                // 上报 io 的处理时间
                 context.reportActiveIoTime(activeIoEndTimeNanos - activeIoStartTimeNanos);
             } else {
+                // 直接处理 key事件
                 handled = processSelectedKeys();
             }
         } catch (Error e) {
@@ -575,8 +605,13 @@ public final class NioIoHandler implements IoHandler {
         }
     }
 
+    /**
+     * 处理 selectKey 逻辑
+     * @return
+     */
     private int processSelectedKeys() {
         if (selectedKeys != null) {
+            // selectedKeys 不为空，走的优化逻辑
             return processSelectedKeysOptimized();
         } else {
             return processSelectedKeysPlain(selector.selectedKeys());
@@ -628,17 +663,26 @@ public final class NioIoHandler implements IoHandler {
         return handled;
     }
 
+    /**
+     * 处理事件的详细过程
+     * @return
+     */
     private int processSelectedKeysOptimized() {
         int handled = 0;
         for (int i = 0; i < selectedKeys.size; ++i) {
+            // 当前要处理的 key
             final SelectionKey k = selectedKeys.keys[i];
+            // gc 回收
             // null out entry in the array to allow to have it GC'ed once the Channel close
             // See https://github.com/netty/netty/issues/2363
             selectedKeys.keys[i] = null;
 
+            // 处理 key 事件
             processSelectedKey(k);
+            // 统计处理的数量
             ++handled;
 
+            // 判断如果需要再 select，则继续 select
             if (needsToSelectAgain) {
                 // null out entries in the array to allow to have it GC'ed once the Channel close
                 // See https://github.com/netty/netty/issues/2363
@@ -648,19 +692,30 @@ public final class NioIoHandler implements IoHandler {
                 i = -1;
             }
         }
+        // 返回处理数量
         return handled;
     }
 
+    /**
+     * 事件处理逻辑
+     * @param k
+     */
     private void processSelectedKey(SelectionKey k) {
+        // 获取对应的注册信息
         final DefaultNioRegistration registration = (DefaultNioRegistration) k.attachment();
+
+        // 如果当前的的注册无效或者 key 无效
         if (!registration.isValid()) {
             try {
+                // 注册通道关闭
                 registration.handle.close();
             } catch (Exception e) {
                 logger.debug("Exception during closing " + registration.handle, e);
             }
             return;
         }
+
+        // 正常走这里处理，处理事件
         registration.handle(k.readyOps());
     }
 
@@ -827,7 +882,11 @@ public final class NioIoHandler implements IoHandler {
         return selector;
     }
 
+    /**
+     * 再一次 select
+     */
     private void selectAgain() {
+        // 设置 agent 标识为 false
         needsToSelectAgain = false;
         try {
             selector.selectNow();

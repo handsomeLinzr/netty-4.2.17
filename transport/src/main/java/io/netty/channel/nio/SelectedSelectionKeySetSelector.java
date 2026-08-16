@@ -52,9 +52,16 @@ final class SelectedSelectionKeySetSelector extends Selector {
         return delegate.selectedKeys();
     }
 
+    /**
+     * 马上调用 select 获取到内核注册事件
+     * @return
+     * @throws IOException
+     */
     @Override
     public int selectNow() throws IOException {
+        // selectionKeys 重置
         selectionKeys.reset();
+        // 调用 java 原始 select，执行 selectNow
         return delegate.selectNow();
     }
 

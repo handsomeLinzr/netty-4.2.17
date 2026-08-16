@@ -87,7 +87,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     private static final AtomicIntegerFieldUpdater<SingleThreadEventExecutor> CONSECUTIVE_BUSY_CYCLES_UPDATER =
             AtomicIntegerFieldUpdater.newUpdater(SingleThreadEventExecutor.class, "consecutiveBusyCycles");
 
-    // 当前线程的任务队列  mpsc 队列
+    // 当前线程的任务队列  mpsc 队列  MpscUnboundedArrayQueue
     private final Queue<Runnable> taskQueue;
 
     private volatile Thread thread;
@@ -113,8 +113,11 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     // true
     private final boolean supportSuspension;
 
+    // 线程实际处理任务的活跃的纳秒数
     // A running total of nanoseconds this executor has spent in an "active" state.
     private volatile long accumulatedActiveTimeNanos;
+
+    // 线程最后处理任务的时间
     // Timestamp of the last recorded activity (tasks + I/O).
     private volatile long lastActivityTimeNanos;
     /**
@@ -128,6 +131,8 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
      * utilization has been above the scale-up threshold.
      */
     private volatile int consecutiveBusyCycles;
+
+    // 线程的最后的执行时间
     private long lastExecutionTime;
 
     @SuppressWarnings({ "FieldMayBeFinal", "unused" })
@@ -297,9 +302,17 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         return pollTaskFrom(taskQueue);
     }
 
+    /**
+     * 从 taskQueue 中获取到第一个非 WAKEUP_TASK 的任务
+     * @param taskQueue
+     * @return
+     */
     protected static Runnable pollTaskFrom(Queue<Runnable> taskQueue) {
         for (;;) {
+            // 从 taskQueue 中获取到任务
             Runnable task = taskQueue.poll();
+
+            // 如果不是 WAKEUP_TASK，则返回任务
             if (task != WAKEUP_TASK) {
                 return task;
             }
@@ -486,6 +499,10 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     }
 
     /**
+     *
+     *
+     * 执行 taskQueue 的所有任务
+     *
      * Runs all tasks from the passed {@code taskQueue}.
      *
      * @param taskQueue To poll and execute all tasks.
@@ -493,13 +510,19 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
      * @return {@code true} if at least one task was executed.
      */
     protected final boolean runAllTasksFrom(Queue<Runnable> taskQueue) {
+        // 从 taskQueue 中获取到一个任务
         Runnable task = pollTaskFrom(taskQueue);
         if (task == null) {
+            // 没有任务，直接返回 false
             return false;
         }
         for (;;) {
+            // 执行上边得到的 task
             safeExecute(task);
+
+            // 获取下一个
             task = pollTaskFrom(taskQueue);
+            // 没有了，则直接返回 true，有则继续回到循环，执行
             if (task == null) {
                 return true;
             }
@@ -532,45 +555,76 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
      */
     @SuppressWarnings("NonAtomicOperationOnVolatileField")
     protected boolean runAllTasks(long timeoutNanos) {
+
+        // scheduledTask 中获取到已经到时间能执行的任务，添加到 taskQueue 中
+        // 执行完这一步后，taskQueue 中的任务就包含其他线程加进来的，和从 scheduledTask 加进来的
+        // 后边则需要执行
         fetchFromScheduledTaskQueue(taskQueue);
+
+        // 从 taskQueue 中获取任务
         Runnable task = pollTask();
         if (task == null) {
+
+            // 任务执行完后的后置处理
+            // 这里是执行所有的 tailQueue 的任务
             afterRunningAllTasks();
+            // 返回 false，没有 task 执行
             return false;
         }
 
+        // 如果 task 不为空，有任务
+        // 获取执行截止的时间点，也就是当前时间 + 最大的执行时间 timeoutNanos
         final long deadline = timeoutNanos > 0 ? getCurrentTimeNanos() + timeoutNanos : 0;
         long runTasks = 0;
+
+        // 最后执行时间
         long lastExecutionTime;
 
+        // 当前时间，也就是任务开始时间
         long workStartTime = ticker().nanoTime();
         for (;;) {
+            // 执行 task 任务
             safeExecute(task);
 
+            // 统计执行的任务数量
             runTasks ++;
 
+            // 每 64 个任务检查一次超时，即是否已经超过超时时间
+            // 不要每次任务都检查，因为 nanoTime() 方法涉及系统调用，比较耗资源
             // Check timeout every 64 tasks because nanoTime() is relatively expensive.
             // XXX: Hard-coded value - will make it configurable if it is really a problem.
             if ((runTasks & 0x3F) == 0) {
                 lastExecutionTime = getCurrentTimeNanos();
+                // 当前时间已经超过 deadline 截止时间，则跳出
                 if (lastExecutionTime >= deadline) {
                     break;
                 }
             }
 
+            // 获取下一个任务
             task = pollTask();
             if (task == null) {
+                // 没有任务了，设置最后执行时间
                 lastExecutionTime = getCurrentTimeNanos();
                 break;
             }
         }
 
+        // 任务的最后执行时间
         long workEndTime = ticker().nanoTime();
+
+        // 类加活动的纳秒数
         accumulatedActiveTimeNanos += workEndTime - workStartTime;
+        // 最后的活动纳秒时间
         lastActivityTimeNanos = workEndTime;
 
+        // 后置处理，执行 tailQueue 任务
         afterRunningAllTasks();
+
+        // 设置最后的执行时间
         this.lastExecutionTime = lastExecutionTime;
+
+        // 返回 true，有 task 执行
         return true;
     }
 
@@ -580,6 +634,9 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     protected void afterRunningAllTasks() { }
 
     /**
+     *
+     * 返回 currentTimeNanos 距离定时任务队列 scheduledTaskQueue 的时间
+     *
      * Returns the amount of time left until the scheduled task with the closest dead line is executed.
      */
     protected long delayNanos(long currentTimeNanos) {
@@ -587,21 +644,28 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
         ScheduledFutureTask<?> scheduledTask = peekScheduledTask();
         if (scheduledTask == null) {
+            // 没有任务了，返回 1
             return SCHEDULE_PURGE_INTERVAL;
         }
 
+        // 返回 currentTimeNanos 距离 scheduledTask 的时间
         return scheduledTask.delayNanos(currentTimeNanos);
     }
 
     /**
+     *
+     * 获取下一个 scheduledTaskQueue 中的任务的执行时间点（绝对时间）
+     *
      * Returns the absolute point in time (relative to {@link #getCurrentTimeNanos()}) at which the next
      * closest scheduled task should run.
      */
     protected long deadlineNanos() {
         ScheduledFutureTask<?> scheduledTask = peekScheduledTask();
         if (scheduledTask == null) {
+            // 没有任务，则当前时间 + 1
             return getCurrentTimeNanos() + SCHEDULE_PURGE_INTERVAL;
         }
+        // 第一个任务的 deadlineNanos
         return scheduledTask.deadlineNanos();
     }
 
@@ -1229,6 +1293,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                 boolean suspend = false;
                 try {
                     for (;;) {
+                        // 调用 SingleThreadIoEventLoop 的 run 方法
                         SingleThreadEventExecutor.this.run();
                         success = true;
 

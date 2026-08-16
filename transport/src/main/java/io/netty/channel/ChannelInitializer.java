@@ -123,7 +123,7 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
             if (initChannel(ctx)) {
 
                 // 调用初始化通道，传入 ChannelHandlerContext
-                // 当初始化完成后，需要将当前 handlerContext 移除
+                // 当初始化完成后，则从 initMap 中将 ctx 移除
                 // We are done with init the Channel, removing the initializer now.
                 removeState(ctx);
             }
@@ -135,14 +135,23 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
         initMap.remove(ctx);
     }
 
-    // 初始化
+    /**
+     * 初始化通道 channel
+     * 1.添加到 initMap
+     * 2.调用 initChannel(channel)
+     * 3.将自己从 pipeline 移除
+     *
+     * @param ctx
+     * @return
+     * @throws Exception
+     */
     @SuppressWarnings("unchecked")
     private boolean initChannel(ChannelHandlerContext ctx) throws Exception {
         // ctx 只能被调用一次
         if (initMap.add(ctx)) { // Guard against re-entrance.
             try {
                 // 内部调用 initChannel 抽象方法
-                // 这里主要会调用到自定义的那个初始化方法
+                // 这里主要会调用到 ServerBootstrap 中添加 ChannelInitializer.initChannel 这个 listener 的方法
                 initChannel((C) ctx.channel());
             } catch (Throwable cause) {
                 // Explicitly route the failure into the pipeline. Re-entrance is guarded by

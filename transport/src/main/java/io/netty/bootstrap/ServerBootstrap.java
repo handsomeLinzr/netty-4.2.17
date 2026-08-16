@@ -187,14 +187,24 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
          *
          */
         p.addLast(new ChannelInitializer<Channel>() {
+
+            // 在调用 register 中，会被调用到
             @Override
             public void initChannel(final Channel ch) {
+
+                // 获取当前的 pipeline
                 final ChannelPipeline pipeline = ch.pipeline();
+
+                // 获取自定义的 server 处理器
                 ChannelHandler handler = config.handler();
                 if (handler != null) {
+                    // 添加到 pipeline
                     pipeline.addLast(handler);
                 }
 
+                // 线程组线程执行
+                // 在 pipeline 最后添加 ServerBootstrapAcceptor 处理
+                // 所以现在 pipeline 就要有 上边的 handler + ServerBootstrapAcceptor
                 ch.eventLoop().execute(new Runnable() {
                     @Override
                     public void run() {
@@ -240,6 +250,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         private final Runnable enableAutoReadTask;
         private final Collection<ChannelInitializerExtension> extensions;
 
+        // 接收请求的处理器
         ServerBootstrapAcceptor(
                 final Channel channel, EventLoopGroup childGroup, ChannelHandler childHandler,
                 Entry<ChannelOption<?>, Object>[] childOptions, Entry<AttributeKey<?>, Object>[] childAttrs,

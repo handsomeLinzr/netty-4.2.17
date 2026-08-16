@@ -42,6 +42,9 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
        public void run() { } // Do nothing
     };
 
+    /**
+     * SingleThreadIoEventLoop. IoHandlerContext context 中的逻辑，需要查询到这个队列任务
+     */
     PriorityQueue<ScheduledFutureTask<?>> scheduledTaskQueue;
 
     long nextTaskId;
@@ -178,6 +181,10 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
     }
 
     /**
+     *
+     * 从 scheduledTaskQueue 队列中获取能够到时间执行的任务
+     * 添加到 taskQueue 中
+     *
      * Fetch scheduled tasks from the internal queue and add these to the given {@link Queue}.
      *
      * @param taskQueue the task queue into which the fetched scheduled tasks should be transferred.
@@ -185,22 +192,36 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
      *         as soon as there is space again in {@code taskQueue}.
      */
     protected boolean fetchFromScheduledTaskQueue(Queue<Runnable> taskQueue) {
+
+        // 校验
         assert inEventLoop();
         Objects.requireNonNull(taskQueue, "taskQueue");
+
         if (scheduledTaskQueue == null || scheduledTaskQueue.isEmpty()) {
+            // 如果当前 scheduledTaskQueue 没任务，直接返回
             return true;
         }
+
+        // 获取当前的绝对时间
         long nanoTime = getCurrentTimeNanos();
+
+        // 循环处理
         for (;;) {
+            // 获取当当前定时任务队列中需要执行的头个任务
             ScheduledFutureTask scheduledTask = (ScheduledFutureTask) pollScheduledTask(nanoTime);
             if (scheduledTask == null) {
+                // 没有，直接返回 true
                 return true;
             }
             if (scheduledTask.isCancelled()) {
+                // 如果已经被取消，继续从定时任务队列中获取
                 continue;
             }
+            // 将任务添加到 taskQueue 中
             if (!taskQueue.offer(scheduledTask)) {
                 // No space left in the task queue add it back to the scheduledTaskQueue so we pick it up again.
+
+                // 如果添加失败，taskQueue 没有空间了，则重新添加到 scheduledTaskQueue 中
                 scheduledTaskQueue.add(scheduledTask);
                 return false;
             }
@@ -208,18 +229,32 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
     }
 
     /**
+     *
+     * 从 scheduledTaskQueue 中返回第一个已经到达执行时间的任务，并设置时间标识
+     *
      * Return the {@link Runnable} which is ready to be executed with the given {@code nanoTime}.
      * You should use {@link #getCurrentTimeNanos()} to retrieve the correct {@code nanoTime}.
      */
     protected final Runnable pollScheduledTask(long nanoTime) {
         assert inEventLoop();
 
+        // 获取第一个定时任务的队列
         ScheduledFutureTask<?> scheduledTask = peekScheduledTask();
+
         if (scheduledTask == null || scheduledTask.deadlineNanos() - nanoTime > 0) {
+            // 没有任务
+            // 第一个任务的执行时间还没到当前时间
+            // 这两种情况下都直接返回 null
             return null;
         }
+
+        // 走到这里，说明 scheduledTaskQueue 第一个任务是已经到了执行时间，则直接移除
         scheduledTaskQueue.remove();
+
+        // 给无需重复的时间打上时间标识
         scheduledTask.setConsumed();
+
+        // 返回这个任务
         return scheduledTask;
     }
 
@@ -240,12 +275,19 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
         return scheduledTask != null ? scheduledTask.deadlineNanos() : -1;
     }
 
+    /**
+     * 从 scheduledTaskQueue 优先级队列中获取第一个
+     * @return
+     */
     final ScheduledFutureTask<?> peekScheduledTask() {
         Queue<ScheduledFutureTask<?>> scheduledTaskQueue = this.scheduledTaskQueue;
         return scheduledTaskQueue != null ? scheduledTaskQueue.peek() : null;
     }
 
     /**
+     *
+     * 判断 scheduledTaskQueue 是否还有任务
+     *
      * Returns {@code true} if a scheduled task is ready for processing.
      */
     protected final boolean hasScheduledTasks() {

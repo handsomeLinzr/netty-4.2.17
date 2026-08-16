@@ -101,6 +101,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
 
     // 在注册后，调用到这里的 invokeHandlerAddedIfNeeded，设置成了 false
+    // 则下次就不用调用 handlerAdd 方法了
     private boolean firstRegistration = true;
 
     /**
@@ -310,12 +311,14 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             // ChannelHandler.handlerAdded(...) once the channel is registered.
             if (!registered) {
                 // 还没注册的情况下，设置 setAddPending
+                // 只有还没注册的时候才会调用到这里，先绑定到 pendingHandlerCallbackHead 中
                 // 先设置标记
                 newCtx.setAddPending();
-                // 回调
+                // 添加到 pendingHandlerCallbackHead，后续再回调
                 callHandlerCallbackLater(newCtx, true);
                 return this;
             }
+
 
             EventExecutor executor = newCtx.executor();
             if (!executor.inEventLoop()) {
@@ -323,6 +326,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
                 return this;
             }
         }
+        // // 触发回调，主要是调用 handlerAdded 方法
         callHandlerAdded0(newCtx);
         return this;
     }
@@ -749,7 +753,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         if (firstRegistration) {
             firstRegistration = false;
 
-            // 注册到 EventLoop，在完成注册回调前，回调 ChannelHandlers
+            // 注册到 EventLoop 了，现在可以对前边注册前添加的 handler 回调 handlerAdded 方法了
             // We are now registered to the EventLoop. It's time to call the callbacks for the ChannelHandlers,
             // that were added before the registration was done.
             callHandlerAddedForAllHandlers();
@@ -922,6 +926,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
                 // register 从 head 开始
                 head.channelRegistered(head);
             } else {
+                // 否则还没添加完成，则将事件传递下去
                 head.fireChannelRegistered();
             }
         } else {
@@ -1272,6 +1277,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
+    /**
+     * 调用所有的 Handler 的 handlerAdded 方法
+     */
     private void callHandlerAddedForAllHandlers() {
         final PendingHandlerCallback pendingHandlerCallbackHead;
         synchronized (this) {
@@ -1299,6 +1307,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
+    /**
+     * 延迟调用 handlerAdded
+     * @param ctx
+     * @param added
+     */
     private void callHandlerCallbackLater(AbstractChannelHandlerContext ctx, boolean added) {
         assert !registered;
 
@@ -1318,6 +1331,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
+    /**
+     * 调用 handlerAdded
+     * @param newCtx
+     * @param executor
+     */
     private void callHandlerAddedInEventLoop(final AbstractChannelHandlerContext newCtx, EventExecutor executor) {
         newCtx.setAddPending();
         executor.execute(new Runnable() {
@@ -1429,6 +1447,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
         TailContext(DefaultChannelPipeline pipeline) {
             super(pipeline, null, TAIL_NAME, TailContext.class);
+            // 设置 handler 状态
             setAddComplete();
         }
 
@@ -1495,7 +1514,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             // 设置当前的 unsafe 赋值为对应的 channel 的 unsafe
             unsafe = pipeline.channel().unsafe();
 
-            // 尝试设置当前的 context 的 handlerState 属性为 2
+            // 设置当前 handler 状态为已完成
             setAddComplete();
         }
 
@@ -1514,12 +1533,29 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             // NOOP
         }
 
+        /**
+         *
+         * 绑定处理，head 进行绑定
+         *
+         * @param ctx           the {@link ChannelHandlerContext} for which the bind operation is made
+         * @param localAddress  the {@link SocketAddress} to which it should bound
+         * @param promise       the {@link ChannelPromise} to notify once the operation completes
+         */
         @Override
         public void bind(
                 ChannelHandlerContext ctx, SocketAddress localAddress, ChannelPromise promise) {
             unsafe.bind(localAddress, promise);
         }
 
+        /**
+         *
+         * 连接处理
+         *
+         * @param ctx               the {@link ChannelHandlerContext} for which the connect operation is made
+         * @param remoteAddress     the {@link SocketAddress} to which it should connect
+         * @param localAddress      the {@link SocketAddress} which is used as source on connect
+         * @param promise           the {@link ChannelPromise} to notify once the operation completes
+         */
         @Override
         public void connect(
                 ChannelHandlerContext ctx,
@@ -1528,21 +1564,46 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             unsafe.connect(remoteAddress, localAddress, promise);
         }
 
+        /**
+         * 断连处理
+         * @param ctx               the {@link ChannelHandlerContext} for which the disconnect operation is made
+         * @param promise           the {@link ChannelPromise} to notify once the operation completes
+         */
         @Override
         public void disconnect(ChannelHandlerContext ctx, ChannelPromise promise) {
             unsafe.disconnect(promise);
         }
 
+        /**
+         *
+         * 关闭事件
+         *
+         * @param ctx               the {@link ChannelHandlerContext} for which the close operation is made
+         * @param promise           the {@link ChannelPromise} to notify once the operation completes
+         */
         @Override
         public void close(ChannelHandlerContext ctx, ChannelPromise promise) {
             unsafe.close(promise);
         }
 
+        /**
+         *
+         * 注销处理
+         *
+         * @param ctx               the {@link ChannelHandlerContext} for which the close operation is made
+         * @param promise           the {@link ChannelPromise} to notify once the operation completes
+         */
         @Override
         public void deregister(ChannelHandlerContext ctx, ChannelPromise promise) {
             unsafe.deregister(promise);
         }
 
+        /**
+         *
+         * 读事件
+         *
+         * @param ctx
+         */
         @Override
         public void read(ChannelHandlerContext ctx) {
 
@@ -1550,16 +1611,35 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             unsafe.beginRead();
         }
 
+        /**
+         *
+         * 写事件
+         *
+         * @param ctx               the {@link ChannelHandlerContext} for which the write operation is made
+         * @param msg               the message to write
+         * @param promise           the {@link ChannelPromise} to notify once the operation completes
+         */
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
             unsafe.write(msg, promise);
         }
 
+        /**
+         *
+         * 刷新事件
+         *
+         * @param ctx               the {@link ChannelHandlerContext} for which the flush operation is made
+         */
         @Override
         public void flush(ChannelHandlerContext ctx) {
             unsafe.flush();
         }
 
+        /**
+         * 异常
+         * @param ctx
+         * @param cause
+         */
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             ctx.fireExceptionCaught(cause);
@@ -1567,10 +1647,16 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
         @Override
         public void channelRegistered(ChannelHandlerContext ctx) {
+            // 判断需要的话，调用 handlerAdd 方法
             invokeHandlerAddedIfNeeded();
+            // 传递到下个事件
             ctx.fireChannelRegistered();
         }
 
+        /**
+         * 通道注销
+         * @param ctx
+         */
         @Override
         public void channelUnregistered(ChannelHandlerContext ctx) {
             ctx.fireChannelUnregistered();
@@ -1581,6 +1667,10 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             }
         }
 
+        /**
+         * 通道激活
+         * @param ctx
+         */
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
             ctx.fireChannelActive();
@@ -1589,11 +1679,20 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             readIfIsAutoRead();
         }
 
+        /**
+         * 通道失活
+         * @param ctx
+         */
         @Override
         public void channelInactive(ChannelHandlerContext ctx) {
             ctx.fireChannelInactive();
         }
 
+        /**
+         * 通道读
+         * @param ctx
+         * @param msg
+         */
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
             ctx.fireChannelRead(msg);

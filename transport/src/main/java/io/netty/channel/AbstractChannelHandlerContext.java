@@ -68,10 +68,17 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
 
     /**
      * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} is about to be called.
+     *
+     * Handler 已经加入 Pipeline，但 handlerAdded() 相关流程还没有完全完成。
+     *
      */
     private static final int ADD_PENDING = 1;
     /**
      * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} was called.
+     *
+     *
+     * Handler 已经完整加入 Pipeline，可以正常处理事件。
+     *
      */
     private static final int ADD_COMPLETE = 2;
     /**
@@ -159,9 +166,12 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
      */
     @Override
     public ChannelHandlerContext fireChannelRegistered() {
+
         // 获取 inbound 中有 channelRegistered 方法用到的 context
         AbstractChannelHandlerContext next = findContextInbound(MASK_CHANNEL_REGISTERED);
         if (next.executor().inEventLoop()) {
+
+            // 判断 next 这个 ChannelHandlerContext 是否已经添加完成
             if (next.invokeHandler()) {
                 try {
                     // DON'T CHANGE
@@ -169,6 +179,8 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                     // see https://bugs.openjdk.org/browse/JDK-8180450
                     final ChannelHandler handler = next.handler();
                     final DefaultChannelPipeline.HeadContext headContext = pipeline.head;
+
+                    // 调用 channelRegistered 方法
                     if (handler == headContext) {
                         headContext.channelRegistered(next);
                     } else if (handler instanceof ChannelInboundHandlerAdapter) {
@@ -182,6 +194,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                     next.invokeExceptionCaught(t);
                 }
             } else {
+                // 否则还没添加完成，传递事件
                 next.fireChannelRegistered();
             }
         } else {
@@ -353,6 +366,11 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return this;
     }
 
+    /**
+     * 通道读事件传播
+     * @param msg
+     * @return
+     */
     @Override
     public ChannelHandlerContext fireChannelRead(final Object msg) {
         AbstractChannelHandlerContext next = findContextInbound(MASK_CHANNEL_READ);
@@ -1021,6 +1039,8 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
      * @throws Exception
      */
     final void callHandlerAdded() throws Exception {
+
+        // 设置当前的 handler 的状态为已添加完成
         // We must call setAddComplete before calling handlerAdded. Otherwise if the handlerAdded method generates
         // any pipeline events ctx.handler() will miss them because the state will not allow it.
         if (setAddComplete()) {
@@ -1049,13 +1069,28 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
      * If this method returns {@code false} we will not invoke the {@link ChannelHandler} but just forward the event.
      * This is needed as {@link DefaultChannelPipeline} may already put the {@link ChannelHandler} in the linked-list
      * but not called {@link ChannelHandler#handlerAdded(ChannelHandlerContext)}.
+     *
+     * 判断当前的 handler 是否已经添加完成
+     * 如果 true 则可以执行，false 则还不可以
+     *
      */
     boolean invokeHandler() {
         // Store in local variable to reduce volatile reads.
         int handlerState = this.handlerState;
         return handlerState == ADD_COMPLETE || (!ordered && handlerState == ADD_PENDING);
     }
-
+    /**
+     * Makes best possible effort to detect if {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} was called
+     * yet. If not return {@code false} and if called or could not detect return {@code true}.
+     *
+     * If this method returns {@code false} we will not invoke the {@link ChannelHandler} but just forward the event.
+     * This is needed as {@link DefaultChannelPipeline} may already put the {@link ChannelHandler} in the linked-list
+     * but not called {@link ChannelHandler#handlerAdded(ChannelHandlerContext)}.
+     *
+     * 返回 false 则只转发事件
+     * true 则会调用
+     *
+     */
     @Override
     public boolean isRemoved() {
         return handlerState == REMOVE_COMPLETE;
