@@ -70,7 +70,7 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
         private final List<Object> readBuf = new ArrayList<Object>();
 
         /**
-         *  read 和 连接事件
+         *  连接事件
          */
         @Override
         public void read() {

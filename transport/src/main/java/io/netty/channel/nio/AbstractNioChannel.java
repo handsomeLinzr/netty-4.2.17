@@ -502,7 +502,12 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
                 // Process OP_WRITE first as we may be able to write some queued buffers and so free memory.
                 if (nioReadyOps.contains(NioIoOps.WRITE)) {
-                    // 写事件
+                    // 写事件，将写缓存刷出去
+                    // todo
+                    //  这里有个地方注意，为什么这里不用写？因为前边的所有写都已经写到 io.netty.channel.AbstractChannel.AbstractUnsafe.outboundBuffer，
+                    //  然后需要刷新的时候，那时候再去注册监听  write 事件，然后到内核的tcp 的写队列有空间的时候，表示可以写了，则会触发写事件，也就是这里，
+                    //  然后就会调用 flush 方法刷出去。
+                    //  注意，write 事件的监听后，是只要 tcp 的队列中有空间能写数据，就会触发
 
                     // Call forceFlush which will also take care of clear the OP_WRITE once there is nothing left to
                     // write
@@ -513,7 +518,8 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                 // to a spin loop
                 if (nioReadyOps.contains(NioIoOps.READ_AND_ACCEPT) || nioReadyOps.equals(NioIoOps.NONE)) {
                     // read 或 接收事件
-
+                    // 如果是 serverSocketChannel，则是对应 ACCEPT，服务端负责接收，对应的 unsafe 是 NioMessageUnsafe
+                    // 如果是 SocketChannel，则对应 READ，无论是客户端，还是服务端连接后分出来的客户端连接，都是 NioByteUnsafe
                     read();
                 }
             } catch (CancelledKeyException ignored) {

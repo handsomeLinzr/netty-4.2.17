@@ -253,7 +253,19 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         private final Runnable enableAutoReadTask;
         private final Collection<ChannelInitializerExtension> extensions;
 
-        // 接收请求的处理器
+        /**
+         *
+         * 接收请求的处理器
+         * 主要是有客户端 accept 连接进来后，会触发 channelRead 事件，然后走到这里
+         * 将连接的客户端通道进行设置，最后将这个和客户端连接的 channel 注册到 worker 事件组中
+         *
+         * @param channel
+         * @param childGroup
+         * @param childHandler
+         * @param childOptions
+         * @param childAttrs
+         * @param extensions
+         */
         ServerBootstrapAcceptor(
                 final Channel channel, EventLoopGroup childGroup, ChannelHandler childHandler,
                 Entry<ChannelOption<?>, Object>[] childOptions, Entry<AttributeKey<?>, Object>[] childAttrs,
